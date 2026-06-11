@@ -1,9 +1,8 @@
-import { useState, useEffect, type ChangeEvent } from 'react';
+import { useState, useEffect} from 'react';
 import { 
   asistenciaApi, 
   type EstudianteAsistenciaDto, 
-  type AsistenciaSaveDto, 
-  type DetalleAsistenciaSaveDto 
+  type AsistenciaSaveDto,  
 } from '../../api/asistencia.api';
 import { cursoApi, type CursoListadoDto } from '../../api/curso.api';
 import { cotizacionApi, type VendedorDto } from '../../api/cotizacion.api';

@@ -80,7 +80,7 @@ export default function VentaFormPage() {
   const [cobroRegistrado, setCobroRegistrado] = useState<VentaPagoDto | null>(null);
   
   const [loading, setLoading] = useState(false);
-  const [loadingNcf, setLoadingNcf] = useState(false);
+  const [, setLoadingNcf] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'bienes' | 'servicios' | 'cobro'>('bienes');
 
@@ -93,7 +93,7 @@ export default function VentaFormPage() {
   const [servicioCuenta, setServicioCuenta] = useState('');
   const [showClienteSelector, setShowClienteSelector] = useState(false);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteDto | null>(null);
-  const [avisoNcf, setAvisoNcf] = useState('');
+ // const [setAvisoNcf] = useState('');
 
   // ═══ Cargar datos base ═══
   useEffect(() => {
@@ -239,16 +239,16 @@ if (data.ncf) {
     if (!esEdicion) {
       if (!formData.tipo) {
         setFormData(prev => ({ ...prev, ncf: '' }));
-        setAvisoNcf('');
+        //setAvisoNcf('');
       } else {
         const autoGenerarNcf = async () => {
           setLoadingNcf(true);
           try {
             const { data } = await ventaApi.generarNcf(formData.tipo);
             setFormData(prev => ({ ...prev, ncf: data.ncfGenerado }));
-            setAvisoNcf(data.aviso || '');
+            //setAvisoNcf(data.aviso || '');
           } catch (err: any) {
-            setAvisoNcf(err.response?.data?.message || 'Error al generar NCF');
+            //setAvisoNcf(err.response?.data?.message || 'Error al generar NCF');
             setFormData(prev => ({ ...prev, ncf: '' }));
           } finally {
             setLoadingNcf(false);
@@ -381,10 +381,12 @@ if (data.ncf) {
       };
 
       let idVenta: number;
+      
 
       if (esEdicion && id) {
         await ventaApi.update(parseInt(id), finalData);
         idVenta = parseInt(id);
+        console.log(idVenta);
       } else {
         const ventaRes = await ventaApi.create(finalData, idEmpresa);
         idVenta = typeof ventaRes.data === 'number' ? ventaRes.data : ventaRes.data;

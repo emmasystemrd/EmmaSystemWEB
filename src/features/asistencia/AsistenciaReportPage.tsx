@@ -157,9 +157,9 @@ export default function AsistenciaReportPage() {
       }
     }
   `;
-
-  return (
-    
+return (
+  <>
+    <style>{printStyles}</style>
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-amber-50 py-4 px-3">
       <div className="max-w-[95vw] mx-auto space-y-4">
         
@@ -301,5 +301,6 @@ export default function AsistenciaReportPage() {
         )}
       </div>
     </div>
+    </>
   );
 }

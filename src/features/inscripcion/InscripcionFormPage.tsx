@@ -32,8 +32,8 @@ export default function InscripcionFormPage() {
   const [buscandoEstudiante, setBuscandoEstudiante] = useState(false);
 
   // Estados mock para selects (Reemplazar con llamadas reales a tu API)
-  const [cursos, setCursos] = useState<any[]>([]); 
-  const [instructores, setInstructores] = useState<any[]>([]);
+  //const [cursos, setCursos] = useState<any[]>([]); 
+  //const [instructores, setInstructores] = useState<any[]>([]);
 
   // Cargar datos si es edición
   useEffect(() => {
@@ -46,16 +46,17 @@ export default function InscripcionFormPage() {
       setLoading(true);
       try {
         const { data } = await inscripcionApi.getById(parseInt(id!));
-        setForm({
-          ...data,
-          fecha: data.fecha ? String(data.fecha).split('T')[0] : '',
-          fecha1: data.fecha1 ? String(data.fecha1).split('T')[0] : null,
-          fecha2: data.fecha2 ? String(data.fecha2).split('T')[0] : null,
-        });
+       // setForm({
+       //   ...data,
+       //   fecha: data.fecha ? String(data.fecha).split('T')[0] : '',
+        //  fecha1: data.fecha1 ? String(data.fecha1).split('T')[0] : null,
+        //  fecha2: data.fecha2 ? String(data.fecha2).split('T')[0] : null,
+          
+       // });
         setBusquedaEstudiante(data.codigo_Estudiante);
         // Simular que encontramos el estudiante para mostrar sus datos
         setEstudianteEncontrado({ 
-          idEstudiante: data.idEstudiante, // Asegúrate de que el backend devuelva esto o haz una llamada extra
+          idEstudiante: data.idestudiante, // Asegúrate de que el backend devuelva esto o haz una llamada extra
           codigo: data.codigo_Estudiante,
           estudiante: 'Cargando nombre...', 
           num_Documento: '', telefono: '', codigo_Padre: '' 

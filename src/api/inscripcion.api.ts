@@ -36,6 +36,7 @@ export interface InscripcionDetalleDto {
   fecha1: string | null;
   fecha2: string | null;
   horario: string;
+  idestudiante:number;
   codigo_Estudiante: string;
   codigo_Facilitador: string;
 }

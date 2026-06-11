@@ -1,6 +1,6 @@
 import { useState, useEffect, type ChangeEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { cursoApi, type CursoSaveDto, type CursoDetalleItemDto } from '../../api/curso.api';
+import { cursoApi, type CursoSaveDto } from '../../api/curso.api';
 
 const initialForm: CursoSaveDto = {
   codigo: '',

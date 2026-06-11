@@ -2,12 +2,11 @@ import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { 
   configApi, 
   type ConfProveedorClienteDto, 
-  type ConfImpuestoDto, 
-  type ConfEmpleadoDto, 
-  type ConfTssDto, 
-  type ConfFacturacionDto, 
-  type ConfFactElectronicaDto, 
-  type ConfFactElectronicaSaveDto 
+  //type ConfImpuestoDto, 
+  //type ConfEmpleadoDto, 
+  //type ConfTssDto, 
+  //type ConfFacturacionDto, 
+  type ConfFactElectronicaDto
 } from '../../api/configuracion.api';
 import { empresaApi, type EmpresaDto } from '../../api/empresa.api';
 import { dgiiApi } from '../../api/dgii.api';
@@ -75,10 +74,10 @@ export default function ConfiguracionPage() {
   // Estados de datos
   const [empresa, setEmpresa] = useState<Partial<EmpresaDto>>({});
   const [provCli, setProvCli] = useState<Partial<ConfProveedorClienteDto>>({});
-  const [impuestos, setImpuestos] = useState<Partial<ConfImpuestoDto>>({});
-  const [empleado, setEmpleado] = useState<Partial<ConfEmpleadoDto>>({});
-  const [tss, setTss] = useState<Partial<ConfTssDto>>({});
-  const [factura, setFactura] = useState<Partial<ConfFacturacionDto>>({});
+  //const [impuestos, setImpuestos] = useState<Partial<ConfImpuestoDto>>({});
+  //const [empleado, setEmpleado] = useState<Partial<ConfEmpleadoDto>>({});
+  //const [tss, setTss] = useState<Partial<ConfTssDto>>({});
+  //const [factura, setFactura] = useState<Partial<ConfFacturacionDto>>({});
   const [electronica, setElectronica] = useState<ElectronicaFormState>({});
   
   const certFileRef = useRef<HTMLInputElement>(null);
@@ -163,11 +162,11 @@ export default function ConfiguracionPage() {
             }
             break;
           }
-          case 'proveedor': { const r = await configApi.proveedorCliente.get(); setProvCli(r.data); break; }
-          case 'impuesto': { const r = await configApi.impuestos.get(); setImpuestos(r.data); break; }
-          case 'empleado': { const r = await configApi.empleado.get(); setEmpleado(r.data); break; }
-          case 'tss': { const r = await configApi.tss.get(); setTss(r.data); break; }
-          case 'factura': { const r = await configApi.facturacion.get(); setFactura(r.data); break; }
+          //case 'proveedor': { const r = await configApi.proveedorCliente.get(); setProvCli(r.data); break; }
+          //case 'impuesto': { const r = await configApi.impuestos.get(); setImpuestos(r.data); break; }
+          //case 'empleado': { const r = await configApi.empleado.get(); setEmpleado(r.data); break; }
+          //case 'tss': { const r = await configApi.tss.get(); setTss(r.data); break; }
+          //case 'factura': { const r = await configApi.facturacion.get(); setFactura(r.data); break; }
           case 'electronica': { 
             const r = await configApi.factElectronica.get(); 
             setElectronica(r.data || {}); 

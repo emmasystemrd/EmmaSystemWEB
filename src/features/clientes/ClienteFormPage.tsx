@@ -188,7 +188,7 @@ export default function ClienteFormPage() {
 
   // 🏛️ Estados para validación DGII
   const [documentoFromDgii, setDocumentoFromDgii] = useState(false);
-  const [documentoOriginalDgii, setDocumentoOriginalDgii] = useState('');
+
 
   // 🚨 Estado para errores de validación en tiempo real
   const [errores, setErrores] = useState<{
@@ -398,7 +398,7 @@ export default function ClienteFormPage() {
       }));
 
       setDocumentoFromDgii(false);
-      setDocumentoOriginalDgii('');
+      
       setErrores(prev => ({ ...prev, tipo: undefined, tipo_Id: undefined, num_Documento: undefined }));
       return;
     }
@@ -427,7 +427,7 @@ export default function ClienteFormPage() {
 
       setFormData(prev => ({ ...prev, tipo_Id: nuevoTipoId, num_Documento: '' }));
       setDocumentoFromDgii(false);
-      setDocumentoOriginalDgii('');
+      
       setErrores(prev => ({ ...prev, tipo_Id: undefined, num_Documento: undefined }));
       return;
     }
@@ -520,7 +520,7 @@ export default function ClienteFormPage() {
 
     if (documentoLimpio) {
       setDocumentoFromDgii(true);
-      setDocumentoOriginalDgii(documentoLimpio);
+      //setDocumentoOriginalDgii(documentoLimpio);
       setErrores(prev => ({ ...prev, num_Documento: undefined }));
     }
   };
