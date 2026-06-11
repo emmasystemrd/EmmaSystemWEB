@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+/* ============================================
+   BASE RESET PARA EMMASYSTEM
+   Corrige tamaños de SVGs e imágenes
+   ============================================ */
+
+/* Los SVGs inline deben tener tamaño controlado por clases, no por el contenedor */
+svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* Las imágenes nunca deben desbordar su contenedor */
+img {
+  max-width: 100%;
+  height: auto;
+}
