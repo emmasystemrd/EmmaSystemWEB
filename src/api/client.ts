@@ -13,7 +13,13 @@ const apiClient = axios.create({
 // 🔑 INTERCEPTOR DE PETICIONES (REQUEST)
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('emma_token');
+    // Prioridad: operative > tenant > central
+    const operativeToken = localStorage.getItem('emma_token');
+    const tenantToken = localStorage.getItem('emma_tenant_token');
+    const centralToken = localStorage.getItem('emma_central_token');
+
+    const token = operativeToken || tenantToken || centralToken;
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

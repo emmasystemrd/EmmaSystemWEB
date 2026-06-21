@@ -1,27 +1,39 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import EmmaLogo from '../../components/shared/EmmaLogo';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { loginCentral, isLoading, error, clearError, step } = useAuthStore();
 
   const [form, setForm] = useState({
     usuario: '',
     clave: '',
-    idempresa: 1,
     recordarme: false,
   });
 
   const [showPassword, setShowPassword] = useState(false);
 
+  // Redirigir si ya pasó la etapa de login central
+  useEffect(() => {
+    if (step === 'select-company') {
+      navigate('/select-company', { replace: true });
+    } else if (step === 'empresa') {
+      navigate('/login-empresa', { replace: true });
+    } else if (step === 'authenticated') {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [step, navigate]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     clearError();
     try {
-      await login(form.usuario, form.clave, form.idempresa);
-      navigate('/dashboard', { replace: true });
+      // Mapear campos del formulario a los parámetros de loginCentral
+      // El backend espera email/password, usamos los mismos campos del form
+      await loginCentral(form.usuario, form.clave);
+      // La redirección la maneja el useEffect basado en el step del store
     } catch {
       // El error ya está en el store
     }
@@ -131,9 +143,9 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-3">
-            {/* Usuario */}
+            {/* Usuario / Email */}
             <div>
-              <label htmlFor="usuario" className="block text-xs font-medium text-gray-700 mb-0.5">Usuario</label>
+              <label htmlFor="usuario" className="block text-xs font-medium text-gray-700 mb-0.5">Usuario o Email</label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
                   <svg className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
@@ -146,7 +158,7 @@ export default function LoginPage() {
                   required
                   autoComplete="username"
                   className="block w-full rounded-xl border border-gray-300 py-1.5 pl-8 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition"
-                  placeholder="Ingresa tu usuario"
+                  placeholder="Ingresa tu usuario o email"
                   value={form.usuario}
                   onChange={(e) => setForm({ ...form, usuario: e.target.value })}
                 />

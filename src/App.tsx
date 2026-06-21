@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // Layouts y Autenticación
+import SelectCompanyPage from './features/auth/SelectCompanyPage';
+import LoginEmpresaPage from './features/auth/LoginEmpresaPage';
+
 import LoginPage from './features/auth/LoginPage';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import AppLayout from './components/layout/AppLayout';
@@ -53,7 +56,9 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* === Rutas Públicas === */}
-        <Route path="/login" element={<LoginPage />} />
+<Route path="/login" element={<LoginPage />} />
+<Route path="/select-company" element={<SelectCompanyPage />} />
+<Route path="/login-empresa" element={<LoginEmpresaPage />} />
 
         {/* === Rutas Protegidas === */}
         <Route element={<ProtectedRoute />}>
