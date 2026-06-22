@@ -90,6 +90,7 @@ export default function DetalleProductoTable({ idArticulo, idEmpresa, onDetailsC
         costo: form.costo || 0,
         margen: form.margen || 0,
         precio: form.precio || 0,
+        existencia:form.existencia ?? 0,
       };
 
       if (editingId) {

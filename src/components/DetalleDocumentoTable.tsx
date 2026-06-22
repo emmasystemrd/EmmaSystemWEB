@@ -93,7 +93,7 @@ export default function DetalleDocumentoTable({
     }
     const timer = setTimeout(async () => {
       try {
-        const { data } = await articuloApi.searchForSales(searchArticulo, idEmpresa);
+        const { data } = await articuloApi.searchForSales(searchArticulo);
         setArticulos(data.slice(0, 15));
       } catch (err) {
         console.error('Error al buscar artículos:', err);

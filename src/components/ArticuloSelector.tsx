@@ -36,17 +36,17 @@ export default function ArticuloSelector({
       setError('');
       try {
         if (searchTerm.trim()) {
-          const { data } = await articuloApi.searchForSales(searchTerm, idEmpresa);
+          const { data } = await articuloApi.searchForSales(searchTerm);
           setArticulos(data);
         } else {
-          const { data } = await articuloApi.searchForSales('', idEmpresa);
+          const { data } = await articuloApi.searchForSales('');
           setArticulos(data.slice(0, 50));
         }
       } catch (err: any) {
         console.error('Error al buscar artículos:', err);
         if (!searchTerm.trim()) {
           try {
-            const { data } = await articuloApi.getAll(idEmpresa);
+            const { data } = await articuloApi.getAll();
             setArticulos(data.slice(0, 50) as unknown as ArticuloVentaDto[]);
           } catch {
             setError('No se pudieron cargar los productos');
