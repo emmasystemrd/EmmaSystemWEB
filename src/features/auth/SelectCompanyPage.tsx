@@ -5,7 +5,8 @@ import EmmaLogo from '../../components/shared/EmmaLogo';
 
 export default function SelectCompanyPage() {
   const navigate = useNavigate();
-  const { empresas, nombreCliente, selectEmpresa, isLoading, error, clearError, step } = useAuthStore();
+  // ✅ Agregar logout a las acciones del store
+  const { empresas, nombreCliente, selectEmpresa, isLoading, error, clearError, step, logout } = useAuthStore();
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -25,6 +26,12 @@ export default function SelectCompanyPage() {
     } catch {
       // El error ya está en el store
     }
+  };
+
+  // ✅ Acción para volver al login central limpiando todo
+  const handleBackToLogin = () => {
+    logout();
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -85,6 +92,16 @@ export default function SelectCompanyPage() {
           className="mt-6 flex w-full justify-center items-center rounded-xl h-10 text-sm font-bold text-white shadow-md bg-gradient-to-r from-emerald-500 via-amber-500 to-orange-500 hover:scale-[1.01] hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:hover:scale-100"
         >
           {isLoading ? 'Conectando...' : 'Continuar'}
+        </button>
+
+        {/* ✅ Botón para volver al Login Central */}
+        <button
+          type="button"
+          onClick={handleBackToLogin}
+          disabled={isLoading}
+          className="mt-3 flex w-full justify-center items-center rounded-xl h-9 text-xs font-medium text-gray-600 border border-gray-200 bg-white hover:bg-gray-50 hover:text-gray-800 transition-all duration-200 disabled:opacity-50"
+        >
+          ← Volver al inicio de sesión
         </button>
       </div>
     </div>

@@ -23,6 +23,7 @@ export interface DetalleProductoSaveDto {
   costo: number;
   margen: number;
   precio: number;
+  existencia:number;
 }
 
 export const detalleProductoApi = {

@@ -1,8 +1,8 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+//import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import EmmaLogo from '../../components/shared/EmmaLogo';
-
+import { useNavigate, Link } from 'react-router-dom';
 export default function LoginPage() {
   const navigate = useNavigate();
   const { loginCentral, isLoading, error, clearError, step } = useAuthStore();
@@ -261,14 +261,13 @@ export default function LoginPage() {
             </svg>
             Continuar con Google
           </button>
-
           {/* Footer */}
-          <div className="mt-4 text-center">
-            <p className="text-[10px] text-gray-500">
-              ¿No tienes una cuenta?{' '}
-              <a href="#" className="font-medium text-emerald-600 hover:text-emerald-500">Contáctanos</a>
-            </p>
-          </div>
+<div className="mt-4 text-center">
+  <p className="text-[10px] text-gray-500">
+    ¿No tienes una cuenta?{' '}
+    <Link to="/registro" className="font-medium text-emerald-600 hover:text-emerald-500">Registrar cuenta</Link>
+  </p>
+</div>
         </div>
       </div>
 

@@ -12,22 +12,22 @@ export interface ArticuloDto {
   costo: number;
   precio: number;
   comision: number;
-  balance_inicial: number;
+  exist: number;
   tipo: string;
-  categoriaAF?: number;
+  categoria?: number;
   maximo: number;
   minimo: number;
   tax: number;
   isVencimiento: boolean;
   fecha_vencimiento?: string;
-  cta_inventario: string;
-  cta_costo: string;
-  cta_ingreso: string;
-  cta_ventaAF?: string;
-  facturar_sin_existencia: string;
-  foto?: string;
+  cta_Inventario: string;
+  cta_Costo: string;
+  cta_Ingreso: string;
+  cta_VentaAF?: string;
+  facturar_Sin_Existencia: string;
   estado: string;
   existencia?: string;
+  fotoBase64?: string; // ← AGREGAR
 }
 
 
@@ -64,13 +64,15 @@ export interface ArticuloSaveDto {
   tax: number;
   isVencimiento: boolean;
   fecha_vencimiento?: string;
-  cta_inventario: string;
-  cta_costo: string;
-  cta_ingreso: string;
-  cta_ventaAF?: string;
-  facturar_sin_existencia: string;
+  cta_Inventario: string;
+  cta_Costo: string;
+  cta_Ingreso: string;
+  cta_VentaAF?: string;
+  facturar_Sin_Existencia: string;
   codigo_barra?: string;
   unidades?: number;
+  fotoBase64?: string; // ← AGREGAR
+  estado?: string; // ← AGREGAR
 }
 // ✅ DTO para la PRIMERA API (solo llena el select)
 export interface MedidaDetalleProductoDto {
@@ -86,39 +88,38 @@ export interface DetalleProductoPrecioDto {
   precio: number;
   medida: string | null;
 }
-
 export const articuloApi = {
-  getAll: (idEmpresa: number) => 
-    apiClient.get<ArticuloDto[]>(`/articulo?Idempresa=${idEmpresa}`),
-  
-  // Búsqueda genérica (NO devuelve tax correctamente)
-  search: (texto: string, idEmpresa: number) => 
-    apiClient.get<ArticuloDto[]>(`/articulo/buscar?textobuscar=${encodeURIComponent(texto)}&Idempresa=${idEmpresa}`),
-  
-  // ✅ NUEVO: Búsqueda específica para ventas CON tax correcto
-  searchForSales: (texto: string, idEmpresa: number) => 
+  getAll: () =>
+    apiClient.get<ArticuloDto[]>('/articulo'),
+
+  search: (texto: string) =>
+    apiClient.get<ArticuloDto[]>(`/articulo/buscar?texto=${encodeURIComponent(texto)}`),
+
+  searchForSales: (texto: string) =>
     apiClient.get<ArticuloVentaDto[]>(
-      `/articulo/buscar/venta?texto=${encodeURIComponent(texto)}&Idempresa=${idEmpresa}`
+      `/articulo/buscar/venta?texto=${encodeURIComponent(texto)}`
     ),
-  
-  getById: (idArticulo: number) => 
+
+  // ✅ NUEVO: Obtener producto por ID para edición
+  getById: (idArticulo: number) =>
     apiClient.get<ArticuloDto>(`/articulo/${idArticulo}`),
-  
-  create: (dto: ArticuloSaveDto, idEmpresa: number, idLogin: number) => 
-    apiClient.post<number>('/articulo', { ...dto, idEmpresa, idLogin }),
-  
-  update: (idArticulo: number, dto: ArticuloSaveDto, idLogin: number) => 
-    apiClient.put(`/articulo/${idArticulo}`, { ...dto, idLogin }),
-  
-  delete: (idArticulo: number, idLogin: number) => 
-    apiClient.delete(`/articulo/${idArticulo}`, { data: { idLogin } }),
-   // Primera API: Llenar select (sin precio, sin iddetalle)
+
+  create: (dto: ArticuloSaveDto) =>
+    apiClient.post<{ message: string; idArticulo: number }>('/articulo', dto),
+
+  update: (idArticulo: number, dto: ArticuloSaveDto) =>
+    apiClient.put(`/articulo/${idArticulo}`, dto),
+
+  delete: (idArticulo: number) =>
+    apiClient.delete(`/articulo/${idArticulo}`),
+
   getDetallesByProducto: (idproducto: number) =>
     apiClient.get<MedidaDetalleProductoDto[]>(`/medida/detalle-producto/${idproducto}`),
 
-  // Segunda API: Obtener precio específico por Idmedida + Nombre
-getDetallePrecios: (idArticulo: number, idMedida: number, nombre: string) =>
-  apiClient.get<DetalleProductoPrecioDto[]>(
-    `/articulo/${idArticulo}/detalle-precio?idMedida=${idMedida}&nombre=${encodeURIComponent(nombre)}`
-  ),
+  getDetallePrecios: (idArticulo: number, idMedida: number, nombre: string) =>
+    apiClient.get<DetalleProductoPrecioDto[]>(
+      `/articulo/${idArticulo}/detalle-precio?idMedida=${idMedida}&nombre=${encodeURIComponent(nombre)}`
+    ),
+    getSecuencia: (tipo: string) =>
+  apiClient.get<number>(`/articulo/secuencia/${tipo}`),
 };

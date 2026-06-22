@@ -38,7 +38,41 @@ export interface LoginEmpresaResponse {
   clienteId: number;
   expiresAt: string;
 }
+// ─── Tipos para Registro de Cliente ───
+export interface EmpresaRegistro {
+  nombreEmpresa: string;
+  nombreBD: string;
+  servidorBD: string;
+  connectionString: string;
+  rncCedula?: string;
+  esDefault: boolean;
+}
 
+export interface RegistrarClienteRequest {
+  razonSocial: string;
+  rnc?: string;
+  correoPrincipal: string;
+  telefono?: string;
+  emailAdmin: string;
+  passwordAdmin: string;
+  nombreCompletoAdmin: string;
+  idPlan: number;
+  empresas: EmpresaRegistro[];
+}
+
+export interface RegistrarClienteResponse {
+  idCliente: number;
+  codigoCliente: string;
+  idUsuarioCentral: number;
+  idLicencia: number;
+  idsEmpresas: number[];
+  mensaje: string;
+}
+// Agregar tipo
+export interface ValidarRegistroResponse {
+  esValido: boolean;
+  errores: string[];
+}
 export const authApi = {
   loginCentral: (email: string, password: string) =>
     apiClient.post<LoginCentralResponse>('/auth/login/central', { email, password }),
@@ -48,4 +82,11 @@ export const authApi = {
 
   loginEmpresa: (credentials: LoginEmpresaCredentials) =>
     apiClient.post<LoginEmpresaResponse>('/auth/login/empresa', credentials),
+
+  registrarCliente: (data: RegistrarClienteRequest) =>
+    apiClient.post<RegistrarClienteResponse>('/admin/registrar-cliente', data),
+
+  // Agregar al objeto authApi
+validarRegistro: (data: RegistrarClienteRequest) =>
+  apiClient.post<ValidarRegistroResponse>('/admin/validar-registro', data),
 };

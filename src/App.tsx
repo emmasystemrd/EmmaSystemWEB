@@ -3,7 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 // Layouts y Autenticación
 import SelectCompanyPage from './features/auth/SelectCompanyPage';
 import LoginEmpresaPage from './features/auth/LoginEmpresaPage';
-
+// Agregar import
+import RegisterPage from './features/auth/RegisterPage';
 import LoginPage from './features/auth/LoginPage';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import AppLayout from './components/layout/AppLayout';
@@ -59,7 +60,8 @@ function App() {
 <Route path="/login" element={<LoginPage />} />
 <Route path="/select-company" element={<SelectCompanyPage />} />
 <Route path="/login-empresa" element={<LoginEmpresaPage />} />
-
+// En Rutas Públicas, después de /login-empresa:
+<Route path="/registro" element={<RegisterPage />} />
         {/* === Rutas Protegidas === */}
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
