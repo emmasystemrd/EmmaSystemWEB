@@ -1,306 +1,286 @@
 import { useState, useEffect } from 'react';
-import { asistenciaApi, type AsistenciaMatrixDto } from '../../api/asistencia.api';
-import { cursoApi, type CursoListadoDto } from '../../api/curso.api';
-import { cotizacionApi, type VendedorDto } from '../../api/cotizacion.api';
-import { useAuthStore } from '../../store/authStore';
+import { useParams, useNavigate } from 'react-router-dom';
+import { asistenciaApi, type AsistenciaFormularioDto } from '../../api/asistencia.api';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
-// Mapeo de colores para los códigos de asistencia
-const getColorAsistencia = (codigo: string | null) => {
-  switch (codigo) {
-    case 'P': return 'bg-green-100 text-green-800 font-bold'; // Presente
-    case 'T': return 'bg-amber-100 text-amber-800 font-bold'; // Tardanza
-    case 'M': return 'bg-purple-100 text-purple-800 font-bold'; // Media Presencia
-    case 'A': return 'bg-red-100 text-red-800 font-bold'; // Ausente
-    case 'E': return 'bg-blue-100 text-blue-800 font-bold'; // Excusa
-    case 'N': return 'bg-gray-100 text-gray-600'; // No Laborable
-    default: return 'text-gray-300'; // Vacío
-  }
-};
+export default function AsistenciaFormularioPage() {
+  const { idCurso, idInstructor, fecha } = useParams();
+  const navigate = useNavigate();
+  const [data, setData] = useState<AsistenciaFormularioDto | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export default function AsistenciaReportPage() {
-  const { user } = useAuthStore();
-  const idEmpresa = user?.idempresa ?? 1;
-
-  // Filtros (Por defecto, el mes actual)
-  const hoy = new Date();
-  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
-  const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
-
-  const [fecha1, setFecha1] = useState(primerDiaMes);
-  const [fecha2, setFecha2] = useState(ultimoDiaMes);
-  const [idCurso, setIdCurso] = useState<number>(0);
-  const [idInstructor, setIdInstructor] = useState<number>(0);
-  const [idDetalleCurso, setIdDetalleCurso] = useState<number | null>(null);
-
-  // Datos
-  const [matrixData, setMatrixData] = useState<AsistenciaMatrixDto[]>([]);
-  const [activeDays, setActiveDays] = useState<number[]>([]); // Días que sí tuvieron asistencia
-  
-  // Selects
-  const [cursos, setCursos] = useState<CursoListadoDto[]>([]);
-  const [instructores, setInstructores] = useState<VendedorDto[]>([]);
-  
-  // UI
-  const [loading, setLoading] = useState(false);
-  const [loadingSelects, setLoadingSelects] = useState(true);
-  const [error, setError] = useState('');
-
-  // ═══ Cargar Selects al montar ═══
   useEffect(() => {
-    const cargarSelects = async () => {
+    const cargarDatos = async () => {
       try {
-        const [cursosRes, instructoresRes] = await Promise.all([
-          cursoApi.getAll(),
-          cotizacionApi.getVendedores(idEmpresa)
-        ]);
-        setCursos(cursosRes.data);
-        setInstructores(instructoresRes.data);
-      } catch (err) {
-        console.error('Error cargando selects:', err);
-      } finally {
-        setLoadingSelects(false);
-      }
-    };
-    cargarSelects();
-  }, [idEmpresa]);
-
-  // ═══ Generar Reporte ═══
-  const handleGenerarReporte = async () => {
-    if (idCurso <= 0 || idInstructor <= 0) {
-      setError('⚠️ Debes seleccionar un curso y un instructor');
-      return;
-    }
-    if (fecha1 > fecha2) {
-      setError('⚠️ La fecha inicial no puede ser mayor a la fecha final');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    setMatrixData([]);
-    setActiveDays([]);
-
-    try {
-      const { data } = await asistenciaApi.getMatrix({
-        fecha1,
-        fecha2,
-        idCurso,
-        idDetalleCurso,
-        idInstructor
-      });
-
-      setMatrixData(data);
-
-      // 🔍 LÓGICA CLAVE: Determinar qué días (1-31) tuvieron al menos un registro
-      const daysWithData: number[] = [];
-      for (let i = 1; i <= 31; i++) {
-        const key = `dia_${i}` as keyof AsistenciaMatrixDto;
-        // Si algún estudiante tiene un valor distinto de null o vacío en este día, lo incluimos
-        const tieneRegistros = data.some(student => {
-          const val = student[key] as string | null;
-          return val !== null && val !== '';
+        const fecha1 = new Date(fecha!);
+        const fecha2 = new Date(fecha1);
+        fecha2.setMonth(fecha2.getMonth() + 1);
+        
+        const { data } = await asistenciaApi.getAsistenciaSemanal({
+          fecha1: fecha1.toISOString().split('T')[0],
+          fecha2: fecha2.toISOString().split('T')[0],
+          idCurso: parseInt(idCurso!),
+          idDetalleCurso: null,
+          idInstructor: parseInt(idInstructor!),
         });
         
-        if (tieneRegistros) {
-          daysWithData.push(i);
-        }
+        setData(data);
+      } catch (err) {
+        console.error('Error cargando formulario:', err);
+      } finally {
+        setLoading(false);
       }
-      setActiveDays(daysWithData);
+    };
+    
+    cargarDatos();
+  }, [idCurso, idInstructor, fecha]);
 
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al generar el reporte');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ═══ FUNCIÓN PARA EXPORTAR A EXCEL ═══
+  // ═══ FUNCIÓN PARA EXPORTAR A EXCEL ═══
+const exportarAExcel = () => {
+  if (!data) return;
 
-  // ═══ Calcular Porcentaje de Asistencia ═══
-  const calcularPorcentaje = (estudiante: AsistenciaMatrixDto) => {
-    if (activeDays.length === 0) return 0;
+  // Crear workbook
+  const wb = XLSX.utils.book_new();
+  
+  // Preparar datos para Excel (solo estudiantes)
+  const excelData = data.estudiantes.map(est => ({
+    'No.': est.no,
+    'ALUMNO': est.alumno,
+    'EDAD': est.edad,
+    'GENERO': est.genero,
+    'Semana 1': est.s1_P,
+    'Semana 2': est.s2_P,
+    'Semana 3': est.s3_P,
+    'Semana 4': est.s4_P,
+    'Semana 5': est.s5_P,
+    'TOTAL': est.total_P
+  }));
 
-    let diasAsistidos = 0;
-    activeDays.forEach(dia => {
-      const key = `dia_${dia}` as keyof AsistenciaMatrixDto;
-      const estado = estudiante[key] as string;
-      // Consideramos 'P' (Presente), 'T' (Tardanza) y 'M' (Media Presencia) como asistencia válida
-      if (estado === 'P' || estado === 'T' || estado === 'M') {
-        diasAsistidos++;
-      }
-    });
+  // Crear worksheet con datos de estudiantes
+  const ws = XLSX.utils.json_to_sheet(excelData);
+  
+  // Agregar fila de totales manualmente
+  const totalRow = [
+    '', // No. vacío
+    'TOTALES:',
+    '', // EDAD vacío
+    '', // GENERO vacío
+    data.estudiantes.reduce((sum, e) => sum + e.s1_P, 0),
+    data.estudiantes.reduce((sum, e) => sum + e.s2_P, 0),
+    data.estudiantes.reduce((sum, e) => sum + e.s3_P, 0),
+    data.estudiantes.reduce((sum, e) => sum + e.s4_P, 0),
+    data.estudiantes.reduce((sum, e) => sum + e.s5_P, 0),
+    data.estudiantes.reduce((sum, e) => sum + e.total_P, 0)
+  ];
+  
+  XLSX.utils.sheet_add_aoa(ws, [totalRow], { origin: -1 });
+  
+  // Configurar anchos de columnas
+  ws['!cols'] = [
+    { wch: 5 },  // No.
+    { wch: 40 }, // Alumno
+    { wch: 5 },  // Edad
+    { wch: 8 },  // Genero
+    { wch: 10 }, // Semana 1
+    { wch: 10 }, // Semana 2
+    { wch: 10 }, // Semana 3
+    { wch: 10 }, // Semana 4
+    { wch: 10 }, // Semana 5
+    { wch: 10 }  // Total
+  ];
 
-    return Math.round((diasAsistidos / activeDays.length) * 100);
-  };
+  // Agregar worksheet al workbook
+  XLSX.utils.book_append_sheet(wb, ws, 'Asistencia');
 
-  const getNombreInstructor = (inst: VendedorDto) => {
-    return `${inst.nombres || ''}`.trim() || `Instructor #${inst.idempleado}`;
-  };
+  // Generar nombre del archivo
+  const nombreArchivo = `Asistencia_${data.disciplina.replace(/\s+/g, '_')}_${data.mes}_${data.año}.xlsx`;
 
-  if (loadingSelects) {
-    return <div className="p-12 text-center text-gray-500"><div className="animate-spin text-3xl inline-block mb-2">⏳</div><br/>Cargando...</div>;
+  // Guardar archivo
+  const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  saveAs(blob, nombreArchivo);
+};
+
+  if (loading) {
+    return <div className="p-12 text-center">Cargando...</div>;
   }
 
-// ═══ Estilos específicos para que la impresión salga perfecta ═══
-  const printStyles = `
-    @media print {
-      @page {
-        size: landscape; /* Fuerza orientación horizontal para que quepan los días */
-        margin: 1cm;
-      }
-      body {
-        background: white !important;
-        -webkit-print-color-adjust: exact; /* Obliga a imprimir los colores de fondo */
-        print-color-adjust: exact;
-      }
-      /* Evita que una fila de estudiante se corte entre dos hojas */
-      tbody tr {
-        page-break-inside: avoid;
-      }
-    }
-  `;
-return (
-  <>
-    <style>{printStyles}</style>
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-amber-50 py-4 px-3">
-      <div className="max-w-[95vw] mx-auto space-y-4">
-        
-        {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-800 to-emerald-700 rounded-xl shadow-md overflow-hidden print:hidden">
-          <div className="px-6 py-4 flex justify-between items-center">
-            <div>
-              <h1 className="text-xl font-bold text-white">📊 Reporte de Asistencia (Matriz)</h1>
-              <p className="text-emerald-100 text-xs">Visualiza la asistencia mensual por día y el porcentaje final</p>
-            </div>
-            <button 
-              onClick={() => window.print()} 
-              className="px-4 py-2 bg-white text-emerald-700 text-xs font-bold rounded-lg hover:bg-emerald-50 shadow flex items-center gap-1"
-            >
-              🖨️ Imprimir / PDF
-            </button>
-          </div>
+  if (!data) {
+    return <div className="p-12 text-center">No hay datos disponibles</div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-white p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Botones de acción */}
+        <div className="mb-4 no-print flex gap-2">
+          <button
+            onClick={exportarAExcel}
+            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-sm"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            📊 Exportar Excel
+          </button>
+          
+          <button
+            onClick={() => window.print()}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 shadow-sm"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            🖨️ Imprimir PDF
+          </button>
+          
+          <button
+            onClick={() => navigate(-1)}
+            className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 shadow-sm"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            ← Volver
+          </button>
         </div>
 
-        {/* Filtros */}
-        <div className="bg-white rounded-xl shadow border border-gray-100 p-4 print:hidden">
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+        {/* Formulario */}
+        <div className="border-2 border-black p-6" id="formulario-asistencia">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              {data.logoBase64 && (
+                <img src={data.logoBase64} alt="Logo" className="w-24 h-24 object-contain" />
+              )}
+              <div>
+                <h1 className="text-xl font-bold">FORMULARIO DE ASISTENCIA FONDO FORMACION Y DIFUSION</h1>
+                <p className="text-sm">INSTITUCION: {data.institucion}</p>
+              </div>
+            </div>
+            {data.logoBase64 && (
+              <div className="w-24 h-24 flex items-center justify-center">
+                <img 
+                  src="https://fondoformacion.gob.do/wp-content/uploads/2020/01/logo-fondo-formacion.png" 
+                  alt="Fondo Formacion" 
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Info del curso */}
+          <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
             <div>
-              <label className="block text-[11px] font-semibold text-gray-700 uppercase mb-1">Desde</label>
-              <input type="date" value={fecha1} onChange={(e) => setFecha1(e.target.value)}
-                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none" />
+              <p><strong>Disciplina:</strong> {data.disciplina}</p>
+              <p><strong>DÍA/S:</strong> {data.dias}</p>
+              <p><strong>MES:</strong> {data.mes}</p>
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-gray-700 uppercase mb-1">Hasta</label>
-              <input type="date" value={fecha2} onChange={(e) => setFecha2(e.target.value)}
-                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none" />
+              <p><strong>Docente:</strong> {data.docente}</p>
+              <p><strong>HORARIO DE CLASES:</strong> {data.horario}</p>
+              <p><strong>AÑO:</strong> {data.año}</p>
+            </div>
+          </div>
+
+          {/* Tabla */}
+          <table className="w-full border-collapse border-2 border-black text-xs">
+            <thead>
+              <tr className="bg-blue-100">
+                <th rowSpan={2} className="border-2 border-black px-2 py-1">No.</th>
+                <th rowSpan={2} className="border-2 border-black px-2 py-1">ALUMNO</th>
+                <th rowSpan={2} className="border-2 border-black px-2 py-1">EDAD</th>
+                <th colSpan={2} className="border-2 border-black px-2 py-1">GENERO</th>
+                <th colSpan={5} className="border-2 border-black px-2 py-1">ASISTENCIA (SEMANAL)</th>
+                <th rowSpan={2} className="border-2 border-black px-2 py-1">Total</th>
+              </tr>
+              <tr className="bg-blue-100">
+                <th className="border-2 border-black px-2 py-1">M</th>
+                <th className="border-2 border-black px-2 py-1">F</th>
+                {data.fechasSemanas.map((fechaSemana, idx) => (
+                  <th key={idx} className="border-2 border-black px-2 py-1 text-center">
+                    {idx + 1}ra.<br />{fechaSemana}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.estudiantes.map((est, idx) => (
+                <tr key={idx}>
+                  <td className="border-2 border-black px-2 py-1 text-center">{est.no}</td>
+                  <td className="border-2 border-black px-2 py-1">{est.alumno}</td>
+                  <td className="border-2 border-black px-2 py-1 text-center">{est.edad}</td>
+                  <td className="border-2 border-black px-2 py-1 text-center">{est.genero === 'M' ? 'X' : ''}</td>
+                  <td className="border-2 border-black px-2 py-1 text-center">{est.genero === 'F' ? 'X' : ''}</td>
+                  <td className="border-2 border-black px-2 py-1 text-center">{est.s1_P}</td>
+                  <td className="border-2 border-black px-2 py-1 text-center">{est.s2_P}</td>
+                  <td className="border-2 border-black px-2 py-1 text-center">{est.s3_P}</td>
+                  <td className="border-2 border-black px-2 py-1 text-center">{est.s4_P}</td>
+                  <td className="border-2 border-black px-2 py-1 text-center">{est.s5_P}</td>
+                  <td className="border-2 border-black px-2 py-1 text-center font-bold">{est.total_P}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-gray-100 font-bold">
+                <td colSpan={4} className="border-2 border-black px-2 py-1 text-right">TOTALES:</td>
+                <td className="border-2 border-black px-2 py-1"></td>
+                <td className="border-2 border-black px-2 py-1 text-center">
+                  {data.estudiantes.reduce((sum, e) => sum + e.s1_P, 0)}
+                </td>
+                <td className="border-2 border-black px-2 py-1 text-center">
+                  {data.estudiantes.reduce((sum, e) => sum + e.s2_P, 0)}
+                </td>
+                <td className="border-2 border-black px-2 py-1 text-center">
+                  {data.estudiantes.reduce((sum, e) => sum + e.s3_P, 0)}
+                </td>
+                <td className="border-2 border-black px-2 py-1 text-center">
+                  {data.estudiantes.reduce((sum, e) => sum + e.s4_P, 0)}
+                </td>
+                <td className="border-2 border-black px-2 py-1 text-center">
+                  {data.estudiantes.reduce((sum, e) => sum + e.s5_P, 0)}
+                </td>
+                <td className="border-2 border-black px-2 py-1 text-center">
+                  {data.estudiantes.reduce((sum, e) => sum + e.total_P, 0)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+
+          {/* Firmas */}
+          <div className="mt-12 grid grid-cols-2 gap-8 text-center text-sm">
+            <div>
+              <div className="border-t-2 border-black pt-2 mt-16">
+                <p>Firma Coordinador(a)/ Monitor</p>
+              </div>
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-gray-700 uppercase mb-1">Curso</label>
-              <select value={idCurso} onChange={(e) => setIdCurso(parseInt(e.target.value))}
-                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none bg-white">
-                <option value={0}>-- Seleccionar --</option>
-                {cursos.map(c => <option key={c.idcurso} value={c.idcurso}>{c.curso}</option>)}
-              </select>
+              <div className="border-t-2 border-black pt-2 mt-16">
+                <p>Firma Docente</p>
+              </div>
             </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-gray-700 uppercase mb-1">Instructor</label>
-              <select value={idInstructor} onChange={(e) => setIdInstructor(parseInt(e.target.value))}
-                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none bg-white">
-                <option value={0}>-- Seleccionar --</option>
-                {instructores.map(i => <option key={i.idempleado} value={i.idempleado}>{getNombreInstructor(i)}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-gray-700 uppercase mb-1">Sección (Opcional)</label>
-              <input type="number" value={idDetalleCurso || ''} onChange={(e) => setIdDetalleCurso(e.target.value ? parseInt(e.target.value) : null)}
-                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none" />
-            </div>
-            <button onClick={handleGenerarReporte} disabled={loading}
-              className="w-full px-4 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-1">
-              {loading ? <span className="animate-spin">⏳</span> : '📊'} Generar
-            </button>
           </div>
         </div>
-
-        {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs text-center print:hidden">⚠️ {error}</div>}
-
-        {/* Tabla de Reporte */}
-        {matrixData.length > 0 && (
-          <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-[11px] border-collapse">
-                <thead className="bg-gray-100 text-gray-700 uppercase">
-                  <tr>
-                    <th className="px-2 py-2 border text-left sticky left-0 bg-gray-100 z-10">Estudiante</th>
-                    <th className="px-2 py-2 border text-center">Sexo</th>
-                    <th className="px-2 py-2 border text-center">Edad</th>
-                    
-                    {/* Columnas dinámicas de días */}
-                    {activeDays.map(dia => (
-                      <th key={dia} className="px-1 py-2 border text-center w-8 min-w-[2rem]">
-                        {dia}
-                      </th>
-                    ))}
-                    
-                    <th className="px-2 py-2 border text-center font-bold bg-emerald-50 text-emerald-800 sticky right-0 z-10">
-                      % Asist.
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {matrixData.map((est, index) => {
-                    const porcentaje = calcularPorcentaje(est);
-                    const colorPorcentaje = porcentaje >= 80 ? 'text-green-600' : porcentaje >= 60 ? 'text-amber-600' : 'text-red-600';
-                    
-                    return (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-2 py-1.5 border font-semibold text-gray-900 sticky left-0 bg-white z-10">
-                          {est.estudiante}
-                        </td>
-                        <td className="px-2 py-1.5 border text-center text-gray-600">{est.sexo}</td>
-                        <td className="px-2 py-1.5 border text-center text-gray-600">{est.edad}</td>
-                        
-                        {/* Datos de asistencia por día */}
-                        {activeDays.map(dia => {
-                          const key = `dia_${dia}` as keyof AsistenciaMatrixDto;
-                          const valor = est[key] as string | null;
-                          return (
-                            <td key={dia} className="px-1 py-1.5 border text-center">
-                              <span className={`inline-block w-6 h-6 leading-6 rounded text-[10px] ${getColorAsistencia(valor)}`}>
-                                {valor || '-'}
-                              </span>
-                            </td>
-                          );
-                        })}
-                        
-                        {/* Columna de Porcentaje */}
-                        <td className={`px-2 py-1.5 border text-center font-bold text-sm sticky right-0 bg-white z-10 ${colorPorcentaje}`}>
-                          {porcentaje}%
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                {/* Leyenda */}
-                <tfoot className="bg-gray-50 text-gray-600">
-                  <tr>
-                    <td colSpan={3 + activeDays.length + 1} className="px-2 py-2 border text-[10px]">
-                      <strong>Leyenda:</strong> P = Presente | T = Tardanza | M = Media Presencia | A = Ausente | E = Excusa | N = No Laborable
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Estado vacío */}
-        {!loading && matrixData.length === 0 && !error && (
-          <div className="bg-white rounded-xl shadow border border-gray-100 p-12 text-center">
-            <div className="text-4xl mb-3 opacity-30">📊</div>
-            <p className="text-sm text-gray-500">Selecciona los filtros y presiona "Generar" para ver el reporte</p>
-          </div>
-        )}
       </div>
+
+      {/* Estilos de impresión */}
+      <style>{`
+        @media print {
+          .no-print {
+            display: none;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+          }
+          @page {
+            size: landscape;
+            margin: 1cm;
+          }
+        }
+      `}</style>
     </div>
-    </>
   );
 }

@@ -65,7 +65,46 @@ export interface AsistenciaMatrixDto {
   dia_30: string | null;
   dia_31: string | null;
 }
+export interface AsistenciaFormularioDto {
+  institucion: string;
+  logoBase64: string;
+  disciplina: string;
+  docente: string;
+  dias: string;
+  horario: string;
+  mes: string;
+  año: number;
+  fechasSemanas: string[];
+  estudiantes: AsistenciaSemanalDto[];
+}
 
+export interface AsistenciaSemanalDto {
+  no: number;
+  alumno: string;
+  edad: number;
+  genero: string;
+  s1_P: number;
+  s1_A: number;
+  s1_E: number;
+  s1_T: number;
+  s2_P: number;
+  s2_A: number;
+  s2_E: number;
+  s2_T: number;
+  s3_P: number;
+  s3_A: number;
+  s3_E: number;
+  s3_T: number;
+  s4_P: number;
+  s4_A: number;
+  s4_E: number;
+  s4_T: number;
+  s5_P: number;
+  s5_A: number;
+  s5_E: number;
+  s5_T: number;
+  total_P: number;
+}
 // ═══════════════════════════════════════════════════════════════
 // API CLIENT
 // ═══════════════════════════════════════════════════════════════
@@ -111,4 +150,36 @@ export const asistenciaApi = {
     }
     return apiClient.get<AsistenciaMatrixDto[]>(`/asistencias/matrix?${query.toString()}`);
   },
+  getExistingId: async (params: {
+  fecha: string;
+  idCurso: number;
+  idDetalleCurso: number | null;
+  idInstructor: number;
+}): Promise<number | null> => {
+  const { data } = await apiClient.get<number | null>('/asistencias/existing-id', {
+    params: {
+      fecha: params.fecha,
+      idCurso: params.idCurso,
+      idDetalleCurso: params.idDetalleCurso || 0,
+      idInstructor: params.idInstructor,
+    }
+  });
+  return data;
+},
+getAsistenciaSemanal: (params: {
+  fecha1: string;
+  fecha2: string;
+  idCurso: number;
+  idDetalleCurso: number | null;
+  idInstructor: number;
+}) =>
+  apiClient.get<AsistenciaFormularioDto>('/asistencias/semanal', {
+    params: {
+      fecha1: params.fecha1,
+      fecha2: params.fecha2,
+      idCurso: params.idCurso,
+      idDetalleCurso: params.idDetalleCurso || 0,
+      idInstructor: params.idInstructor,
+    }
+  }),
 };

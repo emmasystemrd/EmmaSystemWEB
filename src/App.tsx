@@ -126,8 +126,7 @@ function App() {
 <Route path="/educacion/inscripciones/nueva" element={<InscripcionFormPage />} />
 <Route path="/educacion/inscripciones/editar/:id" element={<InscripcionFormPage />} />
 <Route path="/educacion/asistencias" element={<AsistenciaPage />} />
-<Route path="/educacion/asistencias/reporte" element={<AsistenciaReportPage />} />
-
+<Route path="/educacion/asistencia-formulario/:idCurso/:idInstructor/:fecha" element={<AsistenciaReportPage />} />
           </Route>
         </Route>
 

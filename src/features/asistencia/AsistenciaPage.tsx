@@ -1,4 +1,5 @@
-import { useState, useEffect} from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // ← AGREGAR si no está
 import { 
   asistenciaApi, 
   type EstudianteAsistenciaDto, 
@@ -19,10 +20,9 @@ const OPCIONES_ASISTENCIA = [
 ];
 
 export default function AsistenciaPage() {
-  // Obtener ID de empresa del usuario logueado
   const { user } = useAuthStore();
   const idEmpresa = user?.idempresa ?? 1;
-
+  const navigate = useNavigate(); // ← AGREGAR ESTA LÍNEA
   // Filtros
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [idCurso, setIdCurso] = useState<number>(0);
@@ -49,11 +49,9 @@ export default function AsistenciaPage() {
     const cargarSelects = async () => {
       setLoadingSelects(true);
       try {
-        // 1. Cargar Cursos
         const cursosRes = await cursoApi.getAll();
         setCursos(cursosRes.data);
 
-        // 2. Cargar Instructores (usando la API de vendedores)
         const instructoresRes = await cotizacionApi.getVendedores(idEmpresa);
         setInstructores(instructoresRes.data);
       } catch (err) {
@@ -66,39 +64,77 @@ export default function AsistenciaPage() {
     cargarSelects();
   }, [idEmpresa]);
 
-  // ═══ Handlers ═══
-  const handleCargar = async () => {
-    if (idCurso <= 0 || idInstructor <= 0) {
-      setError('⚠️ Debes seleccionar un curso y un instructor');
-      return;
-    }
+  // ═══ AUTO-CARGA: Detectar cambios en fecha/curso/instructor ═══
+  useEffect(() => {
+    // Solo auto-cargar si todos los filtros están seleccionados
+    if (idCurso <= 0 || idInstructor <= 0 || !fecha) return;
 
+    const timeoutId = setTimeout(async () => {
+      await cargarAsistenciaAutomatica();
+    }, 300); // Debounce de 300ms
+
+    return () => clearTimeout(timeoutId);
+  }, [fecha, idCurso, idInstructor, idDetalleCurso]);
+
+  const cargarAsistenciaAutomatica = async () => {
     setLoading(true);
     setError('');
     setSuccess('');
-    setEstudiantes([]);
 
     try {
-      const { data } = await asistenciaApi.getEstudiantes({
-        idAsistencia: 0, // 0 indica que queremos la lista base para tomar asistencia
+      // 1. Buscar si ya existe una asistencia registrada para esta combinación
+      const idExistente = await asistenciaApi.getExistingId({
         fecha,
         idCurso,
         idDetalleCurso,
         idInstructor,
       });
-      
-      setEstudiantes(data);
-      
-      // Verificar si ya existe una asistencia registrada (si algún estudiante tiene iddetalle > 0)
-      const existe = data.some(e => (e.iddetalle ?? 0) > 0);
-      if (existe) {
-        setSuccess('ℹ️ Se cargó una asistencia previamente registrada para esta fecha. Puedes modificarla.');
+
+      if (idExistente && idExistente > 0) {
+        // 2. Si existe, cargar la asistencia con sus detalles
+        setIdAsistenciaActual(idExistente);
+        
+        const { data } = await asistenciaApi.getEstudiantes({
+          idAsistencia: idExistente,
+          fecha,
+          idCurso,
+          idDetalleCurso,
+          idInstructor,
+        });
+        
+        setEstudiantes(data);
+        setSuccess('📝 Asistencia previamente registrada cargada. Puedes modificarla según necesites.');
+      } else {
+        // 3. Si no existe, cargar la lista vacía de estudiantes
+        setIdAsistenciaActual(0);
+        
+        const { data } = await asistenciaApi.getEstudiantes({
+          idAsistencia: 0,
+          fecha,
+          idCurso,
+          idDetalleCurso,
+          idInstructor,
+        });
+        
+        setEstudiantes(data);
+        setSuccess('');
       }
     } catch (err: any) {
+      console.error('Error en auto-carga:', err);
       setError(err.response?.data?.message || 'Error al cargar la lista de estudiantes');
+      setEstudiantes([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  // ═══ Handler manual (botón Cargar Lista) ═══
+  const handleCargar = async () => {
+    if (idCurso <= 0 || idInstructor <= 0) {
+      setError('⚠️ Debes seleccionar un curso y un instructor');
+      return;
+    }
+    await cargarAsistenciaAutomatica();
   };
 
   const handleMarcarAsistencia = (index: number, valor: string) => {
@@ -110,78 +146,80 @@ export default function AsistenciaPage() {
   };
 
   const handleGuardar = async () => {
-  // Validaciones previas
-  if (idCurso <= 0) {
-    setError('⚠️ Debes seleccionar un curso');
-    return;
-  }
-  if (idInstructor <= 0) {
-    setError('⚠️ Debes seleccionar un instructor');
-    return;
-  }
-  if (!fecha) {
-    setError('⚠️ Debes seleccionar una fecha');
-    return;
-  }
-
-  const sinMarcar = estudiantes.filter(e => !e.asistencia);
-  if (sinMarcar.length > 0) {
-    if (!window.confirm(`Hay ${sinMarcar.length} estudiantes sin asistencia marcada. Se marcarán como "Ausente" (A) automáticamente. ¿Deseas continuar?`)) {
+    if (idCurso <= 0) {
+      setError('⚠️ Debes seleccionar un curso');
       return;
     }
-  }
+    if (idInstructor <= 0) {
+      setError('⚠️ Debes seleccionar un instructor');
+      return;
+    }
+    if (!fecha) {
+      setError('⚠️ Debes seleccionar una fecha');
+      return;
+    }
 
-  setSaving(true);
-  setError('');
-  setSuccess('');
+    const sinMarcar = estudiantes.filter(e => !e.asistencia);
+    if (sinMarcar.length > 0) {
+      if (!window.confirm(`Hay ${sinMarcar.length} estudiantes sin asistencia marcada. Se marcarán como "Ausente" (A) automáticamente. ¿Deseas continuar?`)) {
+        return;
+      }
+    }
 
-  try {
-    // ✅ CONSTRUIR EL PAYLOAD COMPLETO
-    const payload: AsistenciaSaveDto = {
-      idAsistencia: idAsistenciaActual > 0 ? idAsistenciaActual : null,
-      fecha: fecha,                    // ← ESTE CAMPO ES OBLIGATORIO
-      idcurso: idCurso,                // ← ESTE CAMPO ES OBLIGATORIO
-      iddetalle_Curso: idDetalleCurso || 0,
-      idinstructor: idInstructor,      // ← ESTE CAMPO ES OBLIGATORIO
-      detalles: estudiantes.map(e => ({
-        iddetalle: e.iddetalle ?? 0,
-        idestudiante: e.idestudiante,
-        asistencia: e.asistencia || 'A'
-      }))
-    };
+    setSaving(true);
+    setError('');
+    setSuccess('');
 
-    // ✅ LOG DETALLADO PARA VERIFICAR
-    console.log("📤 PAYLOAD COMPLETO ENVIADO AL BACKEND:", payload);
-    console.log("📋 Detalles incluidos:", payload.detalles.length);
+    try {
+      const payload: AsistenciaSaveDto = {
+        idAsistencia: idAsistenciaActual > 0 ? idAsistenciaActual : null,
+        fecha: fecha,
+        idcurso: idCurso,
+        iddetalle_Curso: idDetalleCurso || 0,
+        idinstructor: idInstructor,
+        detalles: estudiantes.map(e => ({
+          iddetalle: e.iddetalle ?? 0,
+          idestudiante: e.idestudiante,
+          asistencia: e.asistencia || 'A'
+        }))
+      };
 
-    const { data } = await asistenciaApi.saveAsistencia(payload);
-    setIdAsistenciaActual(data.idAsistencia);
-    setSuccess(`✅ ${data.message}`);
-    
-    // Recargar para obtener los Iddetalle correctos
-    handleCargar();
-  } catch (err: any) {
-    console.error("❌ ERROR COMPLETO:", err);
-    console.error("📋 Respuesta del backend:", err.response?.data);
-    
-    // Mostrar el error específico del backend
-    const errorMsg = err.response?.data?.errors 
-      ? Object.values(err.response.data.errors).flat().join(', ')
-      : (err.response?.data?.message || err.message || 'Error al guardar la asistencia');
-    
-    setError(`⚠️ ${errorMsg}`);
-  } finally {
-    setSaving(false);
-  }
-};
+      const { data } = await asistenciaApi.saveAsistencia(payload);
+      setIdAsistenciaActual(data.idAsistencia);
+      
+      // ✅ MENSAJE AMIGABLE Y CLARO
+      const nombreCurso = cursos.find(c => c.idcurso === idCurso)?.curso || 'el curso';
+      const fechaFormateada = new Date(fecha).toLocaleDateString('es-DO', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      
+      setSuccess(
+        `✅ ¡Asistencia registrada exitosamente! Se guardaron ${estudiantes.length} estudiantes para ${nombreCurso} del ${fechaFormateada}.`
+      );
+      
+      // Recargar para obtener los Iddetalle correctos
+      await cargarAsistenciaAutomatica();
+    } catch (err: any) {
+      console.error("Error al guardar:", err);
+      
+      const errorMsg = err.response?.data?.errors 
+        ? Object.values(err.response.data.errors).flat().join(', ')
+        : (err.response?.data?.message || err.message || 'Error al guardar la asistencia');
+      
+      setError(`⚠️ ${errorMsg}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const getOpcionColor = (valor: string) => {
     return OPCIONES_ASISTENCIA.find(o => o.value === valor)?.color || 'bg-gray-50 text-gray-600 border-gray-200';
   };
 
-  // Helper para formatear el nombre del instructor
   const getNombreInstructor = (inst: VendedorDto) => {
-    // Ajusta estos campos según la estructura real de tu VendedorDto
     return `${inst.nombres || ''}`.trim() || inst.nombres || `Vendedor #${inst.idempleado}`;
   };
 
@@ -205,6 +243,14 @@ export default function AsistenciaPage() {
             <p className="text-emerald-100 text-xs">Registra la asistencia diaria de los estudiantes por curso</p>
           </div>
         </div>
+        <div className="flex gap-2">
+  <button
+    onClick={() => navigate(`/educacion/asistencia-formulario/${idCurso}/${idInstructor}/${fecha}`)}
+    className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 flex items-center gap-1"
+  >
+    🖨️ Ver Formulario
+  </button>
+</div>
 
         {/* Filtros */}
         <div className="bg-white rounded-xl shadow border border-gray-100 p-4">
@@ -267,12 +313,33 @@ export default function AsistenciaPage() {
         </div>
 
         {/* Mensajes */}
-        {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs text-center">⚠️ {error}</div>}
-        {success && <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs text-center">{success}</div>}
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs text-center">
+            ⚠️ {error}
+          </div>
+        )}
+        {success && (
+          <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs text-center">
+            {success}
+          </div>
+        )}
 
         {/* Tabla de Asistencia */}
         {estudiantes.length > 0 && (
           <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
+            {/* ✅ INDICADOR DE MODO EDICIÓN */}
+            {idAsistenciaActual > 0 && (
+              <div className="bg-amber-50 border-b border-amber-200 px-4 py-2">
+                <div className="flex items-center gap-2 text-xs text-amber-800">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  <span className="font-semibold">Modo Edición:</span>
+                  <span>Estás modificando una asistencia previamente registrada.</span>
+                </div>
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 text-gray-700 uppercase text-[10px]">
@@ -317,7 +384,7 @@ export default function AsistenciaPage() {
                 className="px-6 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center gap-2"
               >
                 {saving ? <span className="animate-spin">⏳</span> : '💾'} 
-                {saving ? 'Guardando...' : 'Guardar Asistencia'}
+                {saving ? 'Guardando...' : (idAsistenciaActual > 0 ? 'Actualizar Asistencia' : 'Guardar Asistencia')}
               </button>
             </div>
           </div>
@@ -327,7 +394,7 @@ export default function AsistenciaPage() {
         {!loading && estudiantes.length === 0 && !error && (
           <div className="bg-white rounded-xl shadow border border-gray-100 p-12 text-center">
             <div className="text-4xl mb-3 opacity-30">📋</div>
-            <p className="text-sm text-gray-500">Selecciona un curso, instructor y fecha, luego presiona "Cargar Lista"</p>
+            <p className="text-sm text-gray-500">Selecciona un curso, instructor y fecha para cargar la lista automáticamente</p>
           </div>
         )}
       </div>
