@@ -20,6 +20,7 @@ export interface VentaListadoDto {
   estado?: string;
   vencimiento?: string;
   vendedor?: string;
+  estadoEcf?: string | null; // ✅ Agregar esta propiedad
 }
 
 export interface VentaPendienteDto {
@@ -244,21 +245,30 @@ export const ventaApi = {
 
   // ═══ BÚSQUEDA ═══
   searchByColumn: (params: {
-    fecha1: string;
-    fecha2: string;
-    isFecha: string;
-    texto: string;
-    columna: string;
-  }) => {
-    const query = new URLSearchParams({
-      fecha1: params.fecha1,
-      fecha2: params.fecha2,
-      isFecha: params.isFecha,
-      texto: params.texto,
-      columna: params.columna,
-    });
-    return apiClient.get<VentaListadoDto[]>(`/venta/buscar?${query.toString()}`);
-  },
+  columna: string;
+  isFecha: string;
+  fecha1: string;
+  fecha2: string;
+  texto: string;
+  page?: number;
+  pageSize?: number;
+}) => apiClient.get<{
+  items: VentaListadoDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}>('/venta/buscar', { 
+  params: {
+    columna: params.columna,
+    isFecha: params.isFecha === 'true',  // Convertir string a boolean
+    fecha1: params.fecha1,
+    fecha2: params.fecha2,
+    texto: params.texto || '',
+    page: params.page || 1,
+    pageSize: params.pageSize || 25
+  }
+}),
 
   searchByIdWithVencimiento: (texto: string) =>
     apiClient.get<VentaDetalleDto>(
@@ -283,4 +293,28 @@ export const ventaApi = {
   /** Obtiene el detalle de la factura para impresión */
   getFacturaDetalle: (idVenta: number) =>
     apiClient.get<FacturaDetalleReporteDto[]>(`/venta/reporte/${idVenta}/detalle`),
+
+// ✅ DESPUÉS (tipo completo)
+firmarYEnviarEcf: (idVenta: number, ambiente: number) =>
+  apiClient.post<{ 
+    trackId: string; 
+    estado: string; 
+    mensaje?: string;
+    codigo?: string;
+    idEcf?: number;
+    xmlFirmado?: string;
+  }>(
+    `/venta/${idVenta}/firmar-enviar?ambiente=${ambiente}`
+  ),
+consultarEstadosEcf: (ncfs: string[]) =>
+  apiClient.post<Record<string, string>>('/venta/ecf/estados', ncfs),
+// Agregar esta función
+obtenerDatosEcf: (ncf: string) =>
+  apiClient.get<{
+    secuencia: string;
+    codigoSeguridad: string | null;
+    fechaFirma: string | null;
+    ambiente: number;
+    estadoEcf: string | null;
+  }>(`/venta/${ncf}/ecf-datos`),
 };

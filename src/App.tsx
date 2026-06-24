@@ -1,9 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 
 // Layouts y Autenticación
 import SelectCompanyPage from './features/auth/SelectCompanyPage';
 import LoginEmpresaPage from './features/auth/LoginEmpresaPage';
-// Agregar import
 import RegisterPage from './features/auth/RegisterPage';
 import LoginPage from './features/auth/LoginPage';
 import ProtectedRoute from './components/layout/ProtectedRoute';
@@ -28,22 +28,27 @@ import TerminoFormPage from './features/Termino/TerminoFormPage';
 // Cotizacion
 import CotizacionListPage from './features/cotizacion/cotizacionListPage';
 import CotizacionFormPage from './features/cotizacion/cotizacionFormPage';
-import CotizacionPrintPage from './pages/CotizacionPrintPage';
+
+// Lazy loading para componentes pesados
+const VentaFormPage = lazy(() => import('./features/venta/VentaFormPage'));
+const VentaListPage = lazy(() => import('./features/venta/VentaListPage'));
+const CotizacionPrintPage = lazy(() => import('./pages/CotizacionPrintPage'));
+const FacturaPrintPage = lazy(() => import('./pages/FacturaPrintPage'));
+const AsistenciaReportPage = lazy(() => import('./features/asistencia/AsistenciaReportPage'));
 
 // Pedido
 import PedidoListPage from './features/pedido/pedidoListPage';
 import PedidoFormPage from './features/pedido/pedidoFormPage';
+
 // Conduce
 import ConduceListPage from './features/conduce/conduceListPage';
 import ConduceFormPage from './features/conduce/conduceFormPage';
-//Venta
-import VentaListPage from './features/venta/VentaListPage';
-import VentaFormPage from './features/venta/VentaFormPage';
-import FacturaPrintPage from './pages/FacturaPrintPage';
 
 import ENcfListPage from './features/configuracion/ENcfListPage';
 import ConfiguracionPage from './features/configuracion/ConfiguracionPage';
 import ConsultaDgiiPage from './features/configuracion/consultadgii';
+
+// Educación
 import CursoFormPage from './features/curso/CursoFormPage';
 import CursoListPage from './features/curso/CursoListPage';
 import EstudianteListPage from './features/estudiante/EstudianteListPage';
@@ -51,17 +56,17 @@ import EstudianteFormPage from './features/estudiante/EstudianteFormPage';
 import InscripcionListPage from './features/inscripcion/InscripcionListPage';
 import InscripcionFormPage from './features/inscripcion/InscripcionFormPage';
 import AsistenciaPage from './features/asistencia/AsistenciaPage';
-import AsistenciaReportPage from './features/asistencia/AsistenciaReportPage';
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         {/* === Rutas Públicas === */}
-<Route path="/login" element={<LoginPage />} />
-<Route path="/select-company" element={<SelectCompanyPage />} />
-<Route path="/login-empresa" element={<LoginEmpresaPage />} />
-// En Rutas Públicas, después de /login-empresa:
-<Route path="/registro" element={<RegisterPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/select-company" element={<SelectCompanyPage />} />
+        <Route path="/login-empresa" element={<LoginEmpresaPage />} />
+        <Route path="/registro" element={<RegisterPage />} />
+
         {/* === Rutas Protegidas === */}
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
@@ -99,44 +104,75 @@ function App() {
             <Route path="/pedidos" element={<PedidoListPage />} />
             <Route path="/pedidos/nuevo" element={<PedidoFormPage />} />
             <Route path="/pedidos/editar/:id" element={<PedidoFormPage />} />
-            <Route path="/pedidos/:id/imprimir/:tipo" element={<CotizacionPrintPage />} />
+
             {/* Módulo: Ventas - Conduces */}
             <Route path="/conduces" element={<ConduceListPage />} />
             <Route path="/conduces/nuevo" element={<ConduceFormPage />} />
             <Route path="/conduces/editar/:id" element={<ConduceFormPage />} />
-            <Route path="/conduces/:id/imprimir/:tipo" element={<CotizacionPrintPage />} />
 
-            
-            <Route path="/ventas" element={<VentaListPage />} />
-            <Route path="/ventas/nueva" element={<VentaFormPage />} />
-            <Route path="/ventas/:id/editar" element={<VentaFormPage />} />
+            {/* ✅ CORRECTO: Suspense DENTRO del element */}
+            <Route path="/ventas" element={
+              <Suspense fallback={<div className="p-8 text-center">Cargando ventas...</div>}>
+                <VentaListPage />
+              </Suspense>
+            } />
+            <Route path="/ventas/nueva" element={
+              <Suspense fallback={<div className="p-8 text-center">Cargando...</div>}>
+                <VentaFormPage />
+              </Suspense>
+            } />
+            <Route path="/ventas/:id/editar" element={
+              <Suspense fallback={<div className="p-8 text-center">Cargando...</div>}>
+                <VentaFormPage />
+              </Suspense>
+            } />
 
+            {/* Rutas de Impresión - Protegidas y Lazy Loaded */}
+            <Route path="/cotizaciones/:id/imprimir/:tipo" element={
+              <Suspense fallback={<div className="p-8 text-center">Cargando impresión...</div>}>
+                <CotizacionPrintPage />
+              </Suspense>
+            } />
+            <Route path="/conduces/:id/imprimir/:tipo" element={
+              <Suspense fallback={<div className="p-8 text-center">Cargando impresión...</div>}>
+                <CotizacionPrintPage />
+              </Suspense>
+            } />
+            <Route path="/ventas/:noFactura/imprimir" element={
+              <Suspense fallback={<div className="p-8 text-center">Cargando impresión...</div>}>
+                <FacturaPrintPage />
+              </Suspense>
+            } />
+            <Route path="/educacion/asistencia-formulario/:idCurso/:idInstructor/:fecha" element={
+              <Suspense fallback={<div className="p-8 text-center">Cargando formulario...</div>}>
+                <AsistenciaReportPage />
+              </Suspense>
+            } />
+
+            {/* Configuración DGII */}
             <Route path="/agregar-ncf" element={<ENcfListPage />} />
             <Route path="/configuracion" element={<ConfiguracionPage />} />
             <Route path="/consulta-rnc" element={<ConsultaDgiiPage />} />
             
-<Route path="/cursos" element={<CursoListPage />} />
-<Route path="/cursos/nuevo" element={<CursoFormPage />} />
-<Route path="/cursos/editar/:id" element={<CursoFormPage />} />
+            {/* Módulo: Educación */}
+            <Route path="/cursos" element={<CursoListPage />} />
+            <Route path="/cursos/nuevo" element={<CursoFormPage />} />
+            <Route path="/cursos/editar/:id" element={<CursoFormPage />} />
 
-<Route path="/educacion/estudiantes" element={<EstudianteListPage />} />
-<Route path="/educacion/estudiantes/nuevo" element={<EstudianteFormPage />} />
-<Route path="/educacion/estudiantes/editar/:id" element={<EstudianteFormPage />} />
-<Route path="/educacion/inscripciones" element={<InscripcionListPage />} />
-<Route path="/educacion/inscripciones/nueva" element={<InscripcionFormPage />} />
-<Route path="/educacion/inscripciones/editar/:id" element={<InscripcionFormPage />} />
-<Route path="/educacion/asistencias" element={<AsistenciaPage />} />
-<Route path="/educacion/asistencia-formulario/:idCurso/:idInstructor/:fecha" element={<AsistenciaReportPage />} />
+            <Route path="/educacion/estudiantes" element={<EstudianteListPage />} />
+            <Route path="/educacion/estudiantes/nuevo" element={<EstudianteFormPage />} />
+            <Route path="/educacion/estudiantes/editar/:id" element={<EstudianteFormPage />} />
+            
+            <Route path="/educacion/inscripciones" element={<InscripcionListPage />} />
+            <Route path="/educacion/inscripciones/nueva" element={<InscripcionFormPage />} />
+            <Route path="/educacion/inscripciones/editar/:id" element={<InscripcionFormPage />} />
+            
+            <Route path="/educacion/asistencias" element={<AsistenciaPage />} />
           </Route>
         </Route>
 
         {/* === Fallback: Redirección por defecto === */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        // App.tsx o tu archivo de rutas
-      <Route path="/cotizaciones/:id/imprimir/:tipo" element={<CotizacionPrintPage />} />
-      
-      <Route path="/ventas/:noFactura/imprimir" element={<FacturaPrintPage />} />
-
       </Routes>
     </BrowserRouter>
   );

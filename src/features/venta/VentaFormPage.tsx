@@ -11,6 +11,7 @@ import DetalleDocumentoTable from '../../components/DetalleDocumentoTable';
 import type { DetalleDocumentoDto } from '../../api/detalleDocumento.api';
 import { useAuthStore } from '../../store/authStore';
 import ClienteSelector from '../../components/ClienteSelector';
+import { ecfApi, type ConfCertificadoDto } from '../../api/ecf.api';
 
 // ═══ Estado del formulario de Cobro ═══
 interface CobroFormState {
@@ -74,6 +75,11 @@ export default function VentaFormPage() {
     idlogin: idLogin,
   });
   
+  // Estado para facturación electrónica
+  const [procesandoEcf, setProcesandoEcf] = useState(false);
+  const [, ] = useState<ConfCertificadoDto | null>(null);
+  const [mensajeEcf, setMensajeEcf] = useState<{ tipo: 'success' | 'error' | 'info'; texto: string } | null>(null);
+
   // ✅ Estados del cobro
   const [cobroData, setCobroData] = useState<CobroFormState>(initialCobroState);
   const [tieneCobro, setTieneCobro] = useState(false);
@@ -82,6 +88,7 @@ export default function VentaFormPage() {
   const [loading, setLoading] = useState(false);
   const [, setLoadingNcf] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState<'bienes' | 'servicios' | 'cobro'>('bienes');
 
   // ═══ Estados para dropdowns ═══
@@ -93,7 +100,13 @@ export default function VentaFormPage() {
   const [servicioCuenta, setServicioCuenta] = useState('');
   const [showClienteSelector, setShowClienteSelector] = useState(false);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteDto | null>(null);
- // const [setAvisoNcf] = useState('');
+
+  // ═══ Función para detectar si el NCF es electrónico ═══
+  const esNcfElectronico = (ncf: string): boolean => {
+    if (!ncf) return false;
+    const ncfLimpio = ncf.trim();
+    return ncfLimpio.startsWith('E') && ncfLimpio.length === 13;
+  };
 
   // ═══ Cargar datos base ═══
   useEffect(() => {
@@ -190,38 +203,58 @@ export default function VentaFormPage() {
             console.error('❌ Error cargando cliente:', err);
           }
         }
-// ✅ VERIFICAR SI TIENE COBRO REGISTRADO
-if (data.ncf) {
+
+        // ✅ VERIFICAR SI TIENE COBRO REGISTRADO
+        if (data.ncf) {
+          try {
+            const pagoRes = await ventaApi.getPagoInfo(data.ncf);
+            const pago = pagoRes.data;
+            
+            if (pago && (pago.codigo || pago.efectivo > 0 || pago.cheque > 0 || 
+                pago.transferencia > 0 || pago.tarjeta > 0 || 
+                pago.retencion_ITBIS > 0 || pago.retencion_ISR > 0)) {
+              
+              setTieneCobro(true);
+              setCobroRegistrado(pago);
+              
+              setCobroData({
+                efectivo: pago.efectivo || 0,
+                cheque: pago.cheque || 0,
+                banco_ck: pago.banco_Ck || 0,
+                num_ck: pago.num_Ck || '',
+                transferencia: pago.transferencia || 0,
+                banco_transf: pago.banco_Transf,
+                ref_transf: pago.ref_Transf || '',
+                tarjeta: pago.tarjeta || 0,
+                tipo_tarjeta: pago.tipo_Tarjeta,
+                ref_tarjeta: pago.ref_Tarjeta || '',
+                retencion_isr: pago.retencion_ISR || 0,
+                retencion_itbis: pago.retencion_ITBIS || 0,
+              });
+            }
+          } catch (err) {
+            console.log('ℹ️ No hay cobro registrado para esta venta');
+          }
+        }
+// ✅ CÓDIGO CORREGIDO
+if (esNcfElectronico(data.ncf)) {
   try {
-    const pagoRes = await ventaApi.getPagoInfo(data.ncf);
-    const pago = pagoRes.data;
-    
-    // Si el cobro tiene datos, significa que existe
-    if (pago && (pago.codigo || pago.efectivo > 0 || pago.cheque > 0 || 
-        pago.transferencia > 0 || pago.tarjeta > 0 || 
-        pago.retencion_ITBIS > 0 || pago.retencion_ISR > 0)) {
-      
-      setTieneCobro(true);
-      setCobroRegistrado(pago);
-      
-      // ✅ Mapeo correcto según los tipos de VentaPagoDto
-      setCobroData({
-        efectivo: pago.efectivo || 0,
-        cheque: pago.cheque || 0,
-        banco_ck: pago.banco_Ck || 0,  // Ya viene como number
-        num_ck: pago.num_Ck || '',
-        transferencia: pago.transferencia || 0,
-        banco_transf: pago.banco_Transf,  // Ya viene como number
-        ref_transf: pago.ref_Transf || '',
-        tarjeta: pago.tarjeta || 0,
-        tipo_tarjeta: pago.tipo_Tarjeta,  // Ya viene como number
-        ref_tarjeta: pago.ref_Tarjeta || '',
-        retencion_isr: pago.retencion_ISR || 0,
-        retencion_itbis: pago.retencion_ITBIS || 0,
-      });
+    // Consultar estado del ECF por NCF
+    const estadoRes = await ecfApi.consultarEstadoPorNcf(data.ncf);
+    if (estadoRes.data && estadoRes.data.estadoEcf) {
+      const estado = estadoRes.data.estadoEcf.toUpperCase();
+      if (estado === 'ACEPTADO') {
+        setMensajeEcf({ tipo: 'success', texto: `✅ Comprobante ${data.ncf} aceptado por la DGII` });
+      } else if (estado === 'RECHAZADO') {
+        setMensajeEcf({ tipo: 'error', texto: `❌ Comprobante ${data.ncf} rechazado por la DGII` });
+      } else if (estado === 'EN PROCESO') {
+        setMensajeEcf({ tipo: 'info', texto: `⏳ Comprobante ${data.ncf} en proceso de validación` });
+      } else if (estado === 'PENDIENTE') {
+        setMensajeEcf({ tipo: 'info', texto: `⏳ Comprobante ${data.ncf} pendiente de envío` });
+      }
     }
   } catch (err) {
-    console.log('ℹ️ No hay cobro registrado para esta venta');
+    console.log('ℹ️ No se pudo verificar el estado ECF');
   }
 }
 
@@ -239,16 +272,13 @@ if (data.ncf) {
     if (!esEdicion) {
       if (!formData.tipo) {
         setFormData(prev => ({ ...prev, ncf: '' }));
-        //setAvisoNcf('');
       } else {
         const autoGenerarNcf = async () => {
           setLoadingNcf(true);
           try {
             const { data } = await ventaApi.generarNcf(formData.tipo);
             setFormData(prev => ({ ...prev, ncf: data.ncfGenerado }));
-            //setAvisoNcf(data.aviso || '');
           } catch (err: any) {
-            //setAvisoNcf(err.response?.data?.message || 'Error al generar NCF');
             setFormData(prev => ({ ...prev, ncf: '' }));
           } finally {
             setLoadingNcf(false);
@@ -331,6 +361,76 @@ if (data.ncf) {
     }));
   };
 
+  // ═══ Función para procesar facturación electrónica ═══
+  const procesarFacturacionElectronica = async (idVenta: number, ncf: string): Promise<boolean> => {
+  try {
+    setProcesandoEcf(true);
+    setMensajeEcf(null);
+    
+    // 1. Verificar configuración del certificado
+    const configRes = await ecfApi.getConfiguracion();
+    const config = configRes.data;
+
+    if (!config.tieneCertificado || !config.tieneClave) {
+      setMensajeEcf({ 
+        tipo: 'error', 
+        texto: '⚠️ No hay certificado digital configurado. Ve a Configuración → Facturación Electrónica.' 
+      });
+      return false;
+    }
+
+    // 2. Llamar al endpoint de facturación electrónica
+    const resultado = await ventaApi.firmarYEnviarEcf(idVenta, config.ambiente);
+    const data = resultado.data;
+    
+    // 3. Manejar respuesta según tipo de comprobante
+    const esConsumoMenor250k = formData.tipo === '32' && calculos.totalVenta <= 250000;
+    
+    if (esConsumoMenor250k) {
+      // Consumo ≤ 250k: Respuesta inmediata
+      if (data.estado === 'ACEPTADO') {
+        setMensajeEcf({ 
+          tipo: 'success', 
+          texto: `✅ Comprobante ${ncf} aceptado inmediatamente por la DGII.` 
+        });
+        return true;
+      } else if (data.estado === 'RECHAZADO') {
+        setMensajeEcf({ 
+          tipo: 'error', 
+          texto: `❌ Comprobante ${ncf} rechazado: ${data.mensaje || 'Error desconocido'}` 
+        });
+        return false;
+      }
+    } else {
+      // Otros tipos: Respuesta con TrackId
+      if (data.trackId) {
+        setMensajeEcf({ 
+          tipo: 'success', 
+          texto: `✅ Comprobante ${ncf} enviado a la DGII. TrackID: ${data.trackId}` 
+        });
+        return true;
+      } else {
+        setMensajeEcf({ 
+          tipo: 'error', 
+          texto: `❌ Error al enviar el comprobante ${ncf}: ${data.mensaje || 'Error desconocido'}` 
+        });
+        return false;
+      }
+    }
+    
+    return false;
+  } catch (err: any) {
+    console.error('❌ Error en facturación electrónica:', err);
+    setMensajeEcf({ 
+      tipo: 'error', 
+      texto: `❌ Error al procesar facturación electrónica: ${err.response?.data?.message || err.message}` 
+    });
+    return false;
+  } finally {
+    setProcesandoEcf(false);
+  }
+};
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -355,6 +455,8 @@ if (data.ncf) {
 
     setLoading(true);
     setError('');
+    setSuccess('');
+    setMensajeEcf(null);
 
     try {
       const detallesMapeados = detallesVenta.map(d => ({
@@ -382,16 +484,15 @@ if (data.ncf) {
 
       let idVenta: number;
       
-
       if (esEdicion && id) {
         await ventaApi.update(parseInt(id), finalData);
         idVenta = parseInt(id);
-        console.log(idVenta);
       } else {
         const ventaRes = await ventaApi.create(finalData, idEmpresa);
         idVenta = typeof ventaRes.data === 'number' ? ventaRes.data : ventaRes.data;
       }
 
+      // ✅ PROCESAR COBRO SI APLICA
       if (calculos.totalCobrado > 0) {
         try {
           const idDocRes = await cobroApi.getIdDocumento('Venta', formData.ncf);
@@ -455,7 +556,26 @@ if (data.ncf) {
         }
       }
 
-      navigate('/ventas');
+      // ✅ VERIFICAR SI EL NCF ES ELECTRÓNICO Y PROCESAR AUTOMÁTICAMENTE
+      const esElectronico = esNcfElectronico(formData.ncf);
+      
+      if (esElectronico) {
+        const ecfExitoso = await procesarFacturacionElectronica(idVenta, formData.ncf);
+        
+        if (ecfExitoso) {
+          setSuccess(`✅ Venta guardada y comprobante electrónico ${formData.ncf} enviado a la DGII`);
+        } else {
+          setSuccess(`⚠️ Venta guardada, pero hubo un problema al enviar el comprobante electrónico a la DGII`);
+        }
+      } else {
+        setSuccess(`✅ Venta guardada correctamente`);
+      }
+
+      // Esperar 2 segundos para mostrar el mensaje antes de navegar
+      setTimeout(() => {
+        navigate('/ventas');
+      }, 2000);
+
     } catch (err: any) {
       console.error('❌ Error al guardar:', err);
       
@@ -513,26 +633,25 @@ if (data.ncf) {
 
   const formatMoney = (v: number) =>
     new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(v);
-// ✅ Función para obtener nombre del banco
-const getNombreBanco = (codigo: number | null | undefined) => {
-  if (!codigo) return 'N/A';
-  const bancos: Record<number, string> = {
-    1: 'APAP', 2: 'BANCO DE RESERVAS', 3: 'BANCO POPULAR',
-    4: 'BHD LEÓN', 5: 'BANCO DEL PROGRESO', 6: 'BANCO SANTA CRUZ',
-    7: 'BANCO CARIBE', 8: 'BANCO ADEMI', 9: 'BANCO PROMERICA',
-    10: 'BANCO ADOPEM', 11: 'BANCAMERICA', 12: 'SCOTIABANK', 13: 'OTRO'
-  };
-  return bancos[codigo] || 'N/A';
-};
 
-// ✅ Función para obtener nombre de tarjeta
-const getNombreTarjeta = (codigo: number | null | undefined) => {
-  if (!codigo) return 'N/A';
-  const tarjetas: Record<number, string> = {
-    1: 'Mastercard', 2: 'Visa', 3: 'American Express', 4: 'Amex', 5: 'Otra'
+  const getNombreBanco = (codigo: number | null | undefined) => {
+    if (!codigo) return 'N/A';
+    const bancos: Record<number, string> = {
+      1: 'APAP', 2: 'BANCO DE RESERVAS', 3: 'BANCO POPULAR',
+      4: 'BHD LEÓN', 5: 'BANCO DEL PROGRESO', 6: 'BANCO SANTA CRUZ',
+      7: 'BANCO CARIBE', 8: 'BANCO ADEMI', 9: 'BANCO PROMERICA',
+      10: 'BANCO ADOPEM', 11: 'BANCAMERICA', 12: 'SCOTIABANK', 13: 'OTRO'
+    };
+    return bancos[codigo] || 'N/A';
   };
-  return tarjetas[codigo] || 'N/A';
-};
+
+  const getNombreTarjeta = (codigo: number | null | undefined) => {
+    if (!codigo) return 'N/A';
+    const tarjetas: Record<number, string> = {
+      1: 'Mastercard', 2: 'Visa', 3: 'American Express', 4: 'Amex', 5: 'Otra'
+    };
+    return tarjetas[codigo] || 'N/A';
+  };
 
   if (loading) {
     return <div className="p-8 text-center text-gray-500">Cargando venta...</div>;
@@ -575,7 +694,7 @@ const getNombreTarjeta = (codigo: number | null | undefined) => {
                 </p>
                 <div className="mt-2 flex gap-4 text-xs">
                   <span className="font-semibold">💰 Total Cobrado: {formatMoney(calculos.totalCobrado)}</span>
-                  {cobroRegistrado?.devuelta || 0 > 0 && (
+                  {(cobroRegistrado?.devuelta || 0) > 0 && (
                     <span className="font-semibold text-emerald-700">
                       ↩️ Devuelta: {formatMoney(cobroRegistrado?.devuelta || 0)}
                     </span>
@@ -586,10 +705,40 @@ const getNombreTarjeta = (codigo: number | null | undefined) => {
           </div>
         )}
 
+        {/* ✅ MENSAJE DE FACTURACIÓN ELECTRÓNICA */}
+        {mensajeEcf && (
+          <div className={`border-l-4 p-4 rounded-lg ${
+            mensajeEcf.tipo === 'success' ? 'bg-green-50 border-green-500' :
+            mensajeEcf.tipo === 'error' ? 'bg-red-50 border-red-500' :
+            'bg-blue-50 border-blue-500'
+          }`}>
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">
+                {mensajeEcf.tipo === 'success' ? '✅' : mensajeEcf.tipo === 'error' ? '❌' : 'ℹ️'}
+              </span>
+              <div className="flex-1">
+                <p className={`text-sm font-semibold ${
+                  mensajeEcf.tipo === 'success' ? 'text-green-800' :
+                  mensajeEcf.tipo === 'error' ? 'text-red-800' :
+                  'text-blue-800'
+                }`}>
+                  {mensajeEcf.texto}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-3">
           {error && (
             <div className="p-2 bg-red-50 border-l-4 border-red-500 rounded text-xs text-red-700">
               ⚠️ {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="p-2 bg-green-50 border-l-4 border-green-500 rounded text-xs text-green-700">
+              ✅ {success}
             </div>
           )}
 
@@ -705,6 +854,9 @@ const getNombreTarjeta = (codigo: number | null | undefined) => {
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 uppercase mb-0.5">
                   NCF / No. Factura <span className="text-red-500">*</span>
+                  {esNcfElectronico(formData.ncf) && (
+                    <span className="ml-2 text-[10px] text-emerald-600 font-bold">🧾 ECF</span>
+                  )}
                 </label>
                 <input
                   type="text"
@@ -892,10 +1044,8 @@ const getNombreTarjeta = (codigo: number | null | undefined) => {
                 </div>
               )}
 
-              {/* ✅ PESTAÑA COBRO */}
               {activeTab === 'cobro' && (
                 <div className="space-y-4">
-                  {/* Indicador de condición */}
                   <div className={`px-3 py-2 rounded-lg text-xs font-medium ${
                     tieneCobro
                       ? 'bg-red-50 border border-red-200 text-red-700'
@@ -911,7 +1061,6 @@ const getNombreTarjeta = (codigo: number | null | undefined) => {
                     }
                   </div>
 
-                  {/* Métodos de Pago */}
                   <div className="bg-white border border-gray-200 rounded-lg p-4">
                     <h4 className="text-sm font-bold text-blue-800 mb-3 pb-1 border-b border-blue-100">
                       💵 Métodos de Pago
@@ -1021,13 +1170,13 @@ const getNombreTarjeta = (codigo: number | null | undefined) => {
                           Banco Transf.
                         </label>
                         {tieneCobro ? (
-  <input
-    type="text"
-    value={getNombreBanco(cobroData.banco_transf)}
-    readOnly
-    className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-100 text-gray-700"
-  />
-) : (
+                          <input
+                            type="text"
+                            value={getNombreBanco(cobroData.banco_transf)}
+                            readOnly
+                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-100 text-gray-700"
+                          />
+                        ) : (
                           <select
                             name="banco_transf"
                             value={cobroData.banco_transf || ''}
@@ -1119,7 +1268,6 @@ const getNombreTarjeta = (codigo: number | null | undefined) => {
                     </div>
                   </div>
 
-                  {/* Retenciones */}
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <h4 className="text-sm font-bold text-red-800 mb-3 pb-1 border-b border-red-100">
                       📋 Retenciones
@@ -1159,7 +1307,6 @@ const getNombreTarjeta = (codigo: number | null | undefined) => {
                     </div>
                   </div>
 
-                  {/* Resumen de Cobro */}
                   <div className="bg-gradient-to-br from-blue-50 to-emerald-50 border border-blue-200 rounded-lg p-4">
                     <h4 className="text-sm font-bold text-blue-800 mb-3 pb-1 border-b border-blue-200">
                       📊 Resumen de Cobro
@@ -1259,10 +1406,21 @@ const getNombreTarjeta = (codigo: number | null | undefined) => {
             {!tieneCobro && (
               <button
                 type="submit"
-                disabled={loading}
-                className="px-6 py-2 text-xs font-bold text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:opacity-50 shadow-sm"
+                disabled={loading || procesandoEcf}
+                className="px-6 py-2 text-xs font-bold text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:opacity-50 shadow-sm flex items-center gap-2"
               >
-                {loading ? 'Guardando...' : esEdicion ? 'Actualizar Venta' : '💾 Guardar Venta'}
+                {loading ? (
+                  'Guardando...'
+                ) : procesandoEcf ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Enviando a DGII...
+                  </>
+                ) : esEdicion ? (
+                  'Actualizar Venta'
+                ) : (
+                  <>💾 Guardar Venta</>
+                )}
               </button>
             )}
           </div>

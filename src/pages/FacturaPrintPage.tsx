@@ -1,8 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import { ventaApi, type FacturaReporteDto, type FacturaDetalleReporteDto, type VentaPagoDto } from '../api/venta.api';
 import { empresaApi, type EmpresaDto } from '../api/empresa.api';
 import { useAuthStore } from '../store/authStore';
+
+interface EcfDatosDto {
+  secuencia: string;
+  codigoSeguridad: string | null;
+  fechaFirma: string | null;
+  ambiente: number;
+  estadoEcf: string | null;
+}
 
 export default function FacturaPrintPage() {
   const { noFactura } = useParams<{ noFactura: string }>();
@@ -17,8 +26,11 @@ export default function FacturaPrintPage() {
   const [logoUrl, setLogoUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // ✅ NUEVO: Datos ECF para QR
+  const [ecfDatos, setEcfDatos] = useState<EcfDatosDto | null>(null);
 
-  // ═══ FUNCIONES HELPER (ANTES DE LOS useMemo) ═══
+  // ═══ FUNCIONES HELPER ═══
   const formatMoney = (value: number | null | undefined) => {
     if (value == null || isNaN(value)) return 'RD$ 0.00';
     return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(value);
@@ -27,6 +39,23 @@ export default function FacturaPrintPage() {
   const formatDate = (dateStr: string | undefined) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('es-DO', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
+  const formatFechaFirma = (dateStr: string | null | undefined) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const date = new Date(dateStr);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+    } catch (err) {
+      console.error('Error formateando fecha:', dateStr, err);
+      return 'N/A';
+    }
   };
 
   const getTituloFactura = (tipo: string) => {
@@ -40,42 +69,166 @@ export default function FacturaPrintPage() {
     }
   };
 
+  const getNombreAmbiente = (ambiente: number) => {
+    switch (ambiente) {
+      case 1: return 'certecf';
+      case 2: return 'ecf';
+      default: return 'testecf';
+    }
+  };
+
+  // ✅ NUEVO: Determinar si es comprobante electrónico
+  const esComprobanteElectronico = (ncf: string): boolean => {
+    if (!ncf) return false;
+    return ncf.trim().startsWith('E') && ncf.trim().length === 13;
+  };
+
+  // ✅ NUEVO: Generar URL del QR
+  const generarUrlQR = useMemo(() => {
+    if (!cabecera || !ecfDatos || !empresa) {
+      console.log('❌ QR: Faltan datos', { cabecera: !!cabecera, ecfDatos: !!ecfDatos, empresa: !!empresa });
+      return null;
+    }
+    
+    const ncf = cabecera.ncf;
+    if (!esComprobanteElectronico(ncf)) {
+      console.log('❌ QR: No es comprobante electrónico:', ncf);
+      return null;
+    }
+    
+    const rncEmisor = empresa.rnc?.replace(/-/g, '') || '';
+    const rncComprador = cabecera.num_Documento?.replace(/-/g, '') || '';
+    const montoTotal = Math.round(cabecera.total * 100) / 100;
+    const codigoSeguridad = ecfDatos.codigoSeguridad || '';
+    const ambienteNombre = getNombreAmbiente(ecfDatos.ambiente);
+    const fechaEmision = new Date(cabecera.fecha).toLocaleDateString('es-DO', { 
+      day: '2-digit', month: '2-digit', year: 'numeric' 
+    }).replace(/\//g, '-');
+    const fechaFirma = ecfDatos.fechaFirma 
+      ? formatFechaFirma(ecfDatos.fechaFirma).replace(' ', '%20')
+      : '';
+
+    // Calcular Gravado + Exento (para determinar si es consumo ≤ 250k)
+    const gravado = cabecera.subtotal || 0;
+    const exento = 0; // Ajustar si tienes campo de exento
+    const totalGravadoExento = gravado + exento;
+
+    console.log('✅ QR: Generando URL con datos:', {
+      ncf,
+      rncEmisor,
+      codigoSeguridad,
+      ambiente: ambienteNombre,
+      montoTotal,
+      totalGravadoExento
+    });
+
+    // ✅ LÓGICA IGUAL AL DESKTOP
+    if (ncf.includes('E32') && totalGravadoExento <= 250000) {
+      // Consumo ≤ 250k - URL simplificada
+      return `https://fc.dgii.gov.do/${ambienteNombre}/consultatimbrefc?rncemisor=${rncEmisor}&encf=${ncf}&montototal=${montoTotal.toFixed(2)}&codigoseguridad=${encodeURIComponent(codigoSeguridad)}`;
+    } else {
+      // Crédito Fiscal, NC, ND, Consumo > 250k - URL completa
+      return `https://ecf.dgii.gov.do/${ambienteNombre}/ConsultaTimbre?RncEmisor=${rncEmisor}&RncComprador=${rncComprador}&ENCF=${ncf}&FechaEmision=${fechaEmision}&MontoTotal=${montoTotal.toFixed(2)}&FechaFirma=${fechaFirma}&CodigoSeguridad=${encodeURIComponent(codigoSeguridad)}`;
+    }
+  }, [cabecera, ecfDatos, empresa]);
+
   // ═══ useEffect: Carga de datos ═══
   useEffect(() => {
     const fetchData = async () => {
-      if (!noFactura) return;
+      if (!noFactura) {
+        setError('No se proporcionó un NCF');
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
+      setError('');
+      
       try {
+        console.log('🔄 Iniciando carga de factura:', noFactura);
+        
+        // 1. Cargar datos básicos en paralelo
         const [cabRes, empRes, pagoRes] = await Promise.all([
           ventaApi.getFacturaReporte(noFactura),
           empresaApi.getById(idEmpresa),
-          ventaApi.getPagoInfo(noFactura).catch(() => ({ data: null }))
+          ventaApi.getPagoInfo(noFactura).catch(err => {
+            console.warn('⚠️ Error cargando pago (no crítico):', err.message);
+            return { data: null };
+          })
         ]);
 
+        console.log('✅ Cabecera cargada:', cabRes.data);
+        console.log('✅ Empresa cargada:', empRes.data);
+        
         setCabecera(cabRes.data);
         setEmpresa(empRes.data);
+        
         if (pagoRes.data) {
           setPago(pagoRes.data);
+          console.log('✅ Pago cargado:', pagoRes.data);
         }
 
+        // 2. Cargar logo (no crítico si falla)
         try {
           const logoRes = await empresaApi.getLogo(idEmpresa);
           if (logoRes.data?.logo) {
             setLogoUrl(`data:image/png;base64,${logoRes.data.logo}`);
+            console.log('✅ Logo cargado');
           }
         } catch (err) {
-          console.warn('⚠️ No se pudo cargar el logo:', err);
+          console.warn('⚠️ No se pudo cargar el logo (no crítico)');
         }
 
+        // 3. Cargar detalles
         if (cabRes.data?.idventa1) {
-          const detRes = await ventaApi.getFacturaDetalle(cabRes.data.idventa1);
-          setDetalles(detRes.data || []);
+          try {
+            const detRes = await ventaApi.getFacturaDetalle(cabRes.data.idventa1);
+            setDetalles(detRes.data || []);
+            console.log('✅ Detalles cargados:', detRes.data?.length || 0);
+          } catch (err: any) {
+            console.warn('⚠️ Error cargando detalles:', err.message);
+          }
         }
+
+        // 4. ✅ NUEVO: Cargar datos ECF (CRÍTICO para QR)
+        if (esComprobanteElectronico(noFactura)) {
+          try {
+            console.log('🔄 Cargando datos ECF para:', noFactura);
+            const ecfRes = await ventaApi.obtenerDatosEcf(noFactura);
+            console.log('✅ Datos ECF cargados:', ecfRes.data);
+            console.log('📊 Detalles ECF:', {
+              secuencia: ecfRes.data?.secuencia,
+              codigoSeguridad: ecfRes.data?.codigoSeguridad,
+              fechaFirma: ecfRes.data?.fechaFirma,
+              ambiente: ecfRes.data?.ambiente,
+              estadoEcf: ecfRes.data?.estadoEcf
+            });
+            setEcfDatos(ecfRes.data);
+          } catch (err: any) {
+            console.error('❌ ERROR CRÍTICO: No se pudieron cargar datos ECF:', err.message);
+            console.error('❌ Detalle del error:', err.response?.data || err);
+            // Crear datos dummy para debugging
+            setEcfDatos({
+              secuencia: noFactura,
+              codigoSeguridad: 'DEBUG',
+              fechaFirma: new Date().toISOString(),
+              ambiente: 0,
+              estadoEcf: 'ERROR'
+            });
+          }
+        } else {
+          console.log('ℹ️ No es comprobante electrónico, no se cargan datos ECF');
+        }
+        
       } catch (err: any) {
-        console.error('❌ Error carga impresión:', err);
-        setError(err.response?.data?.message || 'Error al cargar datos para impresión.');
+        console.error('❌ Error crítico en carga:', err);
+        console.error('❌ Detalle:', err.response?.data || err.message);
+        
+        const errorMsg = err.response?.data?.message || err.message || 'Error desconocido al cargar la factura';
+        setError(`Error al cargar: ${errorMsg}`);
       } finally {
         setLoading(false);
+        console.log('✅ Carga finalizada');
       }
     };
 
@@ -102,7 +255,7 @@ export default function FacturaPrintPage() {
     return items;
   }, [detalles, cabecera]);
 
-  // ═══ Cálculos de pago (AHORA SÍ puede usar formatMoney) ═══
+  // ═══ Cálculos de pago ═══
   const calculosPago = useMemo(() => {
     if (!pago || !cabecera) {
       return {
@@ -150,6 +303,7 @@ export default function FacturaPrintPage() {
   }, [pago, cabecera]);
 
   const mostrarVencimiento = cabecera ? ['31', '44', '45', '46'].includes(cabecera.tipo) : false;
+  const esEcf = cabecera ? esComprobanteElectronico(cabecera.ncf) : false;
 
   if (loading) return <div className="p-8 text-center text-gray-500">Cargando factura...</div>;
   if (error || !cabecera) return <div className="p-8 text-center text-red-600">❌ {error || 'Factura no encontrada'}</div>;
@@ -162,9 +316,21 @@ export default function FacturaPrintPage() {
         <button onClick={() => navigate(-1)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium transition-colors">
           ← Volver
         </button>
-        <button onClick={() => window.print()} className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow flex items-center gap-2 transition-colors">
-          🖨️ Imprimir Factura
-        </button>
+        <div className="flex gap-2">
+          {esEcf && ecfDatos?.estadoEcf && (
+            <span className={`px-3 py-2 rounded-lg text-xs font-bold ${
+              ecfDatos.estadoEcf === 'ACEPTADO' ? 'bg-green-100 text-green-700' :
+              ecfDatos.estadoEcf === 'RECHAZADO' ? 'bg-red-100 text-red-700' :
+              'bg-blue-100 text-blue-700'
+            }`}>
+              {ecfDatos.estadoEcf === 'ACEPTADO' ? '✅' : ecfDatos.estadoEcf === 'RECHAZADO' ? '❌' : '⏳'} 
+              {' '}DGII: {ecfDatos.estadoEcf}
+            </span>
+          )}
+          <button onClick={() => window.print()} className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow flex items-center gap-2 transition-colors">
+            🖨️ Imprimir Factura
+          </button>
+        </div>
       </div>
 
       {/* ═══ HOJA DE IMPRESIÓN ═══ */}
@@ -313,7 +479,6 @@ export default function FacturaPrintPage() {
             <h3 className="text-sm font-bold text-gray-800 mb-3 uppercase tracking-wider">Información de Pago</h3>
             
             <div className="grid grid-cols-2 gap-4">
-              {/* Columna izquierda: Formas de pago */}
               <div className="bg-blue-50 border border-blue-200 rounded p-3">
                 <p className="text-[10px] uppercase text-blue-700 font-bold tracking-wider mb-2">Formas de Pago</p>
                 {calculosPago.formasPago.length > 0 ? (
@@ -326,7 +491,6 @@ export default function FacturaPrintPage() {
                   <p className="text-xs text-gray-600 italic">Sin formas de pago registradas</p>
                 )}
                 
-                {/* ✅ CORREGIDO: Retenciones con paréntesis correctos */}
                 {calculosPago.totalRetenciones > 0 && (
                   <div className="mt-3 pt-2 border-t border-blue-200">
                     <p className="text-[10px] uppercase text-red-700 font-bold tracking-wider mb-1">Retenciones</p>
@@ -344,7 +508,6 @@ export default function FacturaPrintPage() {
                 )}
               </div>
 
-              {/* Columna derecha: Totales de pago */}
               <div className="bg-emerald-50 border border-emerald-200 rounded p-3">
                 <p className="text-[10px] uppercase text-emerald-700 font-bold tracking-wider mb-2">Resumen de Pago</p>
                 <div className="space-y-1 text-xs">
@@ -364,7 +527,6 @@ export default function FacturaPrintPage() {
                   </div>
                 </div>
 
-                {/* Devuelta o Balance */}
                 {calculosPago.devuelta > 0 && (
                   <div className="mt-3 pt-2 border-t border-emerald-200">
                     <div className="flex justify-between">
@@ -391,24 +553,88 @@ export default function FacturaPrintPage() {
           </div>
         )}
 
-        {/* 6. FIRMAS Y PIE DE PÁGINA */}
-        <div className="grid grid-cols-2 gap-16 mt-12 text-center text-xs">
+        {/* 6. FIRMAS */}
+        <div className="grid grid-cols-2 gap-16 mt-12 text-center text-xs mb-8">
+          {/* COLUMNA IZQUIERDA: Firma Empresa */}
           <div>
-            <div className="border-t border-gray-400 pt-2 mt-16">
+            <div className="border-t border-gray-400 pt-2">
               <p className="font-bold uppercase text-gray-800">Firma de Entregado</p>
               <p className="text-gray-500 mt-1">Nombre y Sello de la Empresa</p>
             </div>
           </div>
+
+          {/* COLUMNA DERECHA: Firma Cliente */}
           <div>
-            <div className="border-t border-gray-400 pt-2 mt-16">
+            <div className="border-t border-gray-400 pt-2">
               <p className="font-bold uppercase text-gray-800">Firma de Recibido</p>
               <p className="text-gray-500 mt-1">Nombre, Cédula y Sello del Cliente</p>
             </div>
           </div>
         </div>
 
+        {/* 7. ✅ CÓDIGO QR GRANDE - DEBAJO DE FIRMAS */}
+        {/* 7. ✅ CÓDIGO QR GRANDE - DEBAJO DE FIRMAS */}
+{esEcf && generarUrlQR && ecfDatos && (
+  <div className="mt-8 pt-6 border-t-2 border-emerald-200">
+    <div className="flex flex-col items-center">
+      <h3 className="text-sm font-bold text-emerald-800 mb-3 uppercase tracking-wider">
+        Verificación de Autenticidad - DGII
+      </h3>
+      
+      {/* QR GRANDE - 250px con borde ajustado */}
+      <div className="border-2 border-emerald-600 p-3 rounded-lg bg-white shadow-md mb-3">
+        <QRCodeSVG
+          value={generarUrlQR}
+          size={80}  // ✅ Tamaño óptimo
+          level="M"
+          includeMargin={false}
+          bgColor="#FFFFFF"
+          fgColor="#047857"
+        />
+      </div>
+      
+      {/* Información del QR */}
+      <div className="text-center space-y-2 max-w-xl">
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="bg-emerald-50 px-3 py-2 rounded">
+            <p className="text-[9px] uppercase text-emerald-600 font-bold tracking-wider mb-0.5">Código de Seguridad</p>
+            <p className="font-mono font-bold text-emerald-900 text-sm">
+              {ecfDatos.codigoSeguridad || 'N/A'}
+            </p>
+          </div>
+          <div className="bg-emerald-50 px-3 py-2 rounded">
+            <p className="text-[9px] uppercase text-emerald-600 font-bold tracking-wider mb-0.5">Fecha de Firma</p>
+            <p className="font-mono font-bold text-emerald-900 text-sm">
+              {ecfDatos.fechaFirma ? formatFechaFirma(ecfDatos.fechaFirma) : 'N/A'}
+            </p>
+          </div>
+        </div>
+        
+        <p className="text-[10px] text-gray-600 mt-2 italic">
+          📱 Escanee el código QR para verificar autenticidad ante la DGII
+        </p>
+        
+        {ecfDatos.estadoEcf && (
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold ${
+            ecfDatos.estadoEcf === 'ACEPTADO' ? 'bg-green-100 text-green-700' :
+            ecfDatos.estadoEcf === 'RECHAZADO' ? 'bg-red-100 text-red-700' :
+            'bg-blue-100 text-blue-700'
+          }`}>
+            {ecfDatos.estadoEcf === 'ACEPTADO' ? '✅' : ecfDatos.estadoEcf === 'RECHAZADO' ? '❌' : '⏳'}
+            Estado DGII: {ecfDatos.estadoEcf}
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+        {/* 8. PIE DE PÁGINA */}
         <div className="mt-8 pt-4 border-t border-gray-300 text-center text-[10px] text-gray-500 space-y-1">
-          <p className="font-medium text-gray-700">Gracias por su preferencia. Este documento es un comprobante fiscal válido.</p>
+          <p className="font-medium text-gray-700">
+            Gracias por su preferencia. 
+            {esEcf ? ' Este documento es un Comprobante Electrónico válido emitido ante la DGII.' : ' Este documento es un comprobante fiscal válido.'}
+          </p>
           <p>
             Cajero: <span className="font-semibold text-gray-700">{cabecera.cajero}</span> | 
             Vendedor: <span className="font-semibold text-gray-700">{cabecera.vendedor}</span> | 
@@ -421,6 +647,23 @@ export default function FacturaPrintPage() {
         </div>
 
       </div>
+
+      {/* Estilos para impresión */}
+      <style>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          .print-area {
+            box-shadow: none !important;
+            margin: 0 !important;
+            padding: 1cm !important;
+          }
+          body {
+            background: white !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
