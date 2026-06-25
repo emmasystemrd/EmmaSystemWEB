@@ -191,6 +191,18 @@ export interface FacturaDetalleReporteDto {
   descuento: number;
 }
 
+export interface VentaReporteDto {
+  fecha: string;
+  condicion: string;
+  comprobante: string | null;
+  num_Documento: string | null;
+  razon_Social: string;
+  ncf: string;
+  subtotal: number;
+  itbis: number;
+  descuento: number;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // API CLIENT
 // ═══════════════════════════════════════════════════════════════
@@ -317,4 +329,10 @@ obtenerDatosEcf: (ncf: string) =>
     ambiente: number;
     estadoEcf: string | null;
   }>(`/venta/${ncf}/ecf-datos`),
+
+  // Agregar dentro del objeto ventaApi:
+reporteVentasComprobante: (fecha1: string, fecha2: string, comprobante?: string) =>
+  apiClient.get<VentaReporteDto[]>('/reporte/ventas-comprobante', {
+    params: { fecha1, fecha2, comprobante: comprobante || '' }
+  }),
 };

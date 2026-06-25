@@ -88,6 +88,16 @@ export interface DetalleProductoPrecioDto {
   precio: number;
   medida: string | null;
 }
+
+export interface ArticuloVendidoReporteDto {
+  codigo: string;
+  nombre: string;
+  cantidad: number;
+  medida: string;
+  precio_Venta: number;
+  total_Vendido: number;
+}
+
 export const articuloApi = {
   getAll: () =>
     apiClient.get<ArticuloDto[]>('/articulo'),
@@ -122,4 +132,9 @@ export const articuloApi = {
     ),
     getSecuencia: (tipo: string) =>
   apiClient.get<number>(`/articulo/secuencia/${tipo}`),
+    // Agregar dentro del objeto articuloApi:
+reporteArticulosVendidos: (fecha1: string, fecha2: string) =>
+  apiClient.get<ArticuloVendidoReporteDto[]>('/reporte/articulos-vendidos', {
+    params: { fecha1, fecha2 }
+  }),
 };

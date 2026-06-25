@@ -32,6 +32,24 @@ import CotizacionFormPage from './features/cotizacion/cotizacionFormPage';
 // Lazy loading para componentes pesados
 const VentaFormPage = lazy(() => import('./features/venta/VentaFormPage'));
 const VentaListPage = lazy(() => import('./features/venta/VentaListPage'));
+import VentaReportPage from './features/venta/VentaReportPage';
+import ArticuloReportPage from './features/articulo/ArticuloReportPage';
+import VentaDepartamentoReportPage from './features/reportes/VentaDepartamentoReportPage';
+import UtilidadProductoReportPage from './features/reportes/UtilidadProductoReportPage';
+import ComisionVentaReportPage from './features/reportes/ComisionVentaReportPage';
+import ComisionProductoReportPage from './features/reportes/ComisionProductoReportPage';
+import CotizacionReportPage from './features/reportes/CotizacionReportPage';
+import PedidoReportPage from './features/reportes/PedidoReportPage';
+import ConduceReportPage from './features/reportes/ConduceReportPage';
+
+//Reporte de Clientes
+import SaldosAntiguedadReportPage from './features/reportes/SaldosAntiguedadReportPage';
+import MovimientoClienteReportPage from './features/reportes/MovimientoClienteReportPage';
+import RecibosCobroReportPage from './features/reportes/RecibosCobroReportPage';
+import EstadoCuentaReportPage from './features/reportes/EstadoCuentaReportPage';
+
+
+
 const CotizacionPrintPage = lazy(() => import('./pages/CotizacionPrintPage'));
 const FacturaPrintPage = lazy(() => import('./pages/FacturaPrintPage'));
 const AsistenciaReportPage = lazy(() => import('./features/asistencia/AsistenciaReportPage'));
@@ -148,6 +166,83 @@ function App() {
                 <AsistenciaReportPage />
               </Suspense>
             } />
+
+            <Route path="/reporte/ventas/comprobante" element={
+  <Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+    <VentaReportPage />
+  </Suspense>
+} />
+<Route path="/reporte/ventas/articulos-vendidos" element={
+  <Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+    <ArticuloReportPage />
+  </Suspense>
+} />
+
+<Route path="/reporte/ventas/centro-costos" element={
+  <Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+    <VentaDepartamentoReportPage />
+  </Suspense>
+} />
+
+<Route path="/reporte/ventas/utilidad-producto" element={
+  <Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+    <UtilidadProductoReportPage />
+  </Suspense>
+} />
+
+<Route path="/reporte/ventas/comision-vendedor" element={
+  <Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+    <ComisionVentaReportPage />
+  </Suspense>
+} />
+
+<Route path="/reporte/ventas/comision-producto" element={
+<Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+ <ComisionProductoReportPage />
+</Suspense>
+} />
+
+<Route path="/reporte/ventas/cotizaciones" element={
+<Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+ <CotizacionReportPage />
+</Suspense>
+} />
+
+<Route path="/reporte/ventas/pedidos" element={
+<Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+ <PedidoReportPage   />
+</Suspense>
+} />
+
+<Route path="/reporte/ventas/conduces" element={
+<Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+ <ConduceReportPage />
+</Suspense>
+} />
+
+<Route path="/reportes/clientes/saldos-antiguedad" element={
+<Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+ <SaldosAntiguedadReportPage />
+</Suspense>
+} />
+
+<Route path="/reportes/clientes/movimientos-cliente" element={
+<Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+ <MovimientoClienteReportPage />
+</Suspense>
+} />
+
+<Route path="/reportes/clientes/recibo-cobros" element={
+<Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+ <RecibosCobroReportPage />
+</Suspense>
+} />
+
+<Route path="/reportes/clientes/estado-cuenta" element={
+<Suspense fallback={<div className="p-8 text-center">Cargando reporte...</div>}>
+ <EstadoCuentaReportPage />
+</Suspense>
+} />
 
             {/* Configuración DGII */}
             <Route path="/agregar-ncf" element={<ENcfListPage />} />
