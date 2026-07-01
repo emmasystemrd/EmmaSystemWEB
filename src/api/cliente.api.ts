@@ -10,7 +10,7 @@ export interface TipoComprobanteDto {
 
 // DTO para Retención
 export interface RetencionDto {
-  id: number;
+  idretencion: number;
   codigo: string;
   nombre: string;
   porcentaje: number;

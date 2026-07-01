@@ -257,44 +257,35 @@ export default function FacturaPrintPage() {
 
   // ═══ Cálculos de pago ═══
   const calculosPago = useMemo(() => {
-    if (!pago || !cabecera) {
-      return {
-        tienePago: false,
-        totalMetodosPago: 0,
-        totalRetenciones: 0,
-        totalCobrado: 0,
-        devuelta: 0,
-        balance: 0,
-        formasPago: [] as string[]
-      };
-    }
+    const total = cabecera?.total || 0;
 
-    const totalMetodosPago = 
-      (pago.efectivo || 0) + 
-      (pago.cheque || 0) + 
-      (pago.transferencia || 0) + 
-      (pago.tarjeta || 0);
-    
-    const totalRetenciones = 
-      (pago.retencion_ITBIS || 0) + 
-      (pago.retencion_ISR || 0);
-    
+    const totalMetodosPago = pago
+      ? (pago.efectivo || 0) + (pago.cheque || 0) + (pago.transferencia || 0) + (pago.tarjeta || 0)
+      : 0;
+
+    const retencionITBIS = pago?.retencion_ITBIS || 0;
+    const retencionISR = pago?.retencion_ISR || 0;
+    const totalRetenciones = retencionITBIS + retencionISR;
+
     const totalCobrado = totalMetodosPago + totalRetenciones;
-    const diferencia = cabecera.total - totalCobrado;
-    
+    const diferencia = total - totalCobrado;
+
+    // Si no hay pago, diferencia = total completo -> balance pendiente = total
     const balance = diferencia > 0 ? diferencia : 0;
     const devuelta = diferencia < 0 ? Math.abs(diferencia) : 0;
 
     const formasPago: string[] = [];
-    if (pago.efectivo > 0) formasPago.push(`Efectivo: ${formatMoney(pago.efectivo)}`);
-    if (pago.cheque > 0) formasPago.push(`Cheque: ${formatMoney(pago.cheque)}`);
-    if (pago.transferencia > 0) formasPago.push(`Transferencia: ${formatMoney(pago.transferencia)}`);
-    if (pago.tarjeta > 0) formasPago.push(`Tarjeta: ${formatMoney(pago.tarjeta)}`);
+    if (pago?.efectivo && pago.efectivo > 0) formasPago.push(`Efectivo: ${formatMoney(pago.efectivo)}`);
+    if (pago?.cheque && pago.cheque > 0) formasPago.push(`Cheque: ${formatMoney(pago.cheque)}`);
+    if (pago?.transferencia && pago.transferencia > 0) formasPago.push(`Transferencia: ${formatMoney(pago.transferencia)}`);
+    if (pago?.tarjeta && pago.tarjeta > 0) formasPago.push(`Tarjeta: ${formatMoney(pago.tarjeta)}`);
 
     return {
       tienePago: totalCobrado > 0,
       totalMetodosPago,
       totalRetenciones,
+      retencionITBIS,
+      retencionISR,
       totalCobrado,
       devuelta,
       balance,
@@ -465,11 +456,37 @@ export default function FacturaPrintPage() {
                 <span className="font-mono">{formatMoney(cabecera.propina_Legal)}</span>
               </div>
             )}
-            
             <div className="flex justify-between py-2 bg-emerald-50 px-3 rounded font-bold text-base text-emerald-800 mt-2 border-t-2 border-emerald-700">
               <span>TOTAL A PAGAR:</span>
               <span className="font-mono">{formatMoney(cabecera.total)}</span>
             </div>
+
+            {/* Retenciones - solo si tienen valor */}
+            {calculosPago.retencionITBIS > 0 && (
+              <div className="flex justify-between py-1 border-b border-gray-200 text-red-600">
+                <span className="font-semibold">Retención ITBIS:</span>
+                <span className="font-mono">- {formatMoney(calculosPago.retencionITBIS)}</span>
+              </div>
+            )}
+            {calculosPago.retencionISR > 0 && (
+              <div className="flex justify-between py-1 border-b border-gray-200 text-red-600">
+                <span className="font-semibold">Retención ISR:</span>
+                <span className="font-mono">- {formatMoney(calculosPago.retencionISR)}</span>
+              </div>
+            )}
+
+            {/* Balance o Devuelta */}
+            {calculosPago.devuelta > 0 ? (
+              <div className="flex justify-between py-2 bg-blue-50 px-3 rounded font-bold text-sm text-blue-800 mt-2">
+                <span>DEVUELTA / CAMBIO:</span>
+                <span className="font-mono">{formatMoney(calculosPago.devuelta)}</span>
+              </div>
+            ) : (
+              <div className="flex justify-between py-2 bg-red-50 px-3 rounded font-bold text-sm text-red-800 mt-2">
+                <span>BALANCE:</span>
+                <span className="font-mono">{formatMoney(calculosPago.balance)}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -522,7 +539,7 @@ export default function FacturaPrintPage() {
                     </div>
                   )}
                   <div className="flex justify-between pt-1 border-t border-emerald-200 mt-1">
-                    <span className="font-bold text-gray-800">Total Cobrado:</span>
+                    <span className="font-bold text-gray-800">Total Cobrado + Retenciones:</span>
                     <span className="font-mono font-bold text-emerald-700">{formatMoney(calculosPago.totalCobrado)}</span>
                   </div>
                 </div>

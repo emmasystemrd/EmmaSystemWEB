@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, type FormEvent, type ChangeEvent } from '
 import { useNavigate, useParams } from 'react-router-dom';
 import { ventaApi, type VentaSaveDto, type VentaPagoDto } from '../../api/venta.api';
 import { cobroApi, type CobroSaveDto, type DetalleCobroSaveDto } from '../../api/cobro.api';
-import { clienteApi, type ClienteDto, type TipoComprobanteDto } from '../../api/cliente.api';
+import { clienteApi, type ClienteDto, type TipoComprobanteDto, type RetencionDto } from '../../api/cliente.api';
 import { terminoApi, type TerminoDto } from '../../api/termino.api';
 import { departamentoApi, type DepartamentoDto } from '../../api/departamento.api';
 import { cotizacionApi, type VendedorDto } from '../../api/cotizacion.api';
@@ -27,13 +27,17 @@ interface CobroFormState {
   ref_tarjeta: string;
   retencion_isr: number;
   retencion_itbis: number;
+  id_retencion_itbis: number | null;
+  id_retencion_isr: number | null;
 }
 
 const initialCobroState: CobroFormState = {
   efectivo: 0, cheque: 0, banco_ck: 0, num_ck: '',
   transferencia: 0, banco_transf: 0, ref_transf: '',
   tarjeta: 0, tipo_tarjeta: 0, ref_tarjeta: '',
-  retencion_isr: 0, retencion_itbis: 0
+  retencion_isr: 0, retencion_itbis: 0,
+  id_retencion_itbis: null,
+  id_retencion_isr: null,
 };
 
 const initialFormState: VentaSaveDto = {
@@ -101,6 +105,10 @@ export default function VentaFormPage() {
   const [showClienteSelector, setShowClienteSelector] = useState(false);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteDto | null>(null);
 
+  // ═══ Estados para retenciones ═══
+  const [retencionesItbis, setRetencionesItbis] = useState<RetencionDto[]>([]);
+  const [retencionesIsr, setRetencionesIsr] = useState<RetencionDto[]>([]);
+
   // ═══ Función para detectar si el NCF es electrónico ═══
   const esNcfElectronico = (ncf: string): boolean => {
     if (!ncf) return false;
@@ -112,17 +120,21 @@ export default function VentaFormPage() {
   useEffect(() => {
     const cargarDatos = async () => {
       try {
-        const [termRes, depRes, vendRes, tiposRes] = await Promise.all([
+        const [termRes, depRes, vendRes, tiposRes, retItbisRes, retIsrRes] = await Promise.all([
           terminoApi.getAll(idEmpresa),
           departamentoApi.getAll(idEmpresa),
           cotizacionApi.getVendedores(idEmpresa),
           clienteApi.getTiposComprobante(true),
+          clienteApi.getRetencionesItbis(),
+          clienteApi.getRetencionesIsr(),
         ]);
         
         setTerminos(termRes.data);
         setDepartamentos(depRes.data);
         setVendedores(vendRes.data);
         setTiposComprobante(tiposRes.data);
+        setRetencionesItbis(retItbisRes.data);
+        setRetencionesIsr(retIsrRes.data);
       } catch (err) {
         console.error('Error cargando datos:', err);
       }
@@ -230,33 +242,34 @@ export default function VentaFormPage() {
                 ref_tarjeta: pago.ref_Tarjeta || '',
                 retencion_isr: pago.retencion_ISR || 0,
                 retencion_itbis: pago.retencion_ITBIS || 0,
+                id_retencion_itbis: null,
+                id_retencion_isr: null,
               });
             }
           } catch (err) {
             console.log('ℹ️ No hay cobro registrado para esta venta');
           }
         }
-// ✅ CÓDIGO CORREGIDO
-if (esNcfElectronico(data.ncf)) {
-  try {
-    // Consultar estado del ECF por NCF
-    const estadoRes = await ecfApi.consultarEstadoPorNcf(data.ncf);
-    if (estadoRes.data && estadoRes.data.estadoEcf) {
-      const estado = estadoRes.data.estadoEcf.toUpperCase();
-      if (estado === 'ACEPTADO') {
-        setMensajeEcf({ tipo: 'success', texto: `✅ Comprobante ${data.ncf} aceptado por la DGII` });
-      } else if (estado === 'RECHAZADO') {
-        setMensajeEcf({ tipo: 'error', texto: `❌ Comprobante ${data.ncf} rechazado por la DGII` });
-      } else if (estado === 'EN PROCESO') {
-        setMensajeEcf({ tipo: 'info', texto: `⏳ Comprobante ${data.ncf} en proceso de validación` });
-      } else if (estado === 'PENDIENTE') {
-        setMensajeEcf({ tipo: 'info', texto: `⏳ Comprobante ${data.ncf} pendiente de envío` });
-      }
-    }
-  } catch (err) {
-    console.log('ℹ️ No se pudo verificar el estado ECF');
-  }
-}
+
+        if (esNcfElectronico(data.ncf)) {
+          try {
+            const estadoRes = await ecfApi.consultarEstadoPorNcf(data.ncf);
+            if (estadoRes.data && estadoRes.data.estadoEcf) {
+              const estado = estadoRes.data.estadoEcf.toUpperCase();
+              if (estado === 'ACEPTADO') {
+                setMensajeEcf({ tipo: 'success', texto: `✅ Comprobante ${data.ncf} aceptado por la DGII` });
+              } else if (estado === 'RECHAZADO') {
+                setMensajeEcf({ tipo: 'error', texto: `❌ Comprobante ${data.ncf} rechazado por la DGII` });
+              } else if (estado === 'EN PROCESO') {
+                setMensajeEcf({ tipo: 'info', texto: `⏳ Comprobante ${data.ncf} en proceso de validación` });
+              } else if (estado === 'PENDIENTE') {
+                setMensajeEcf({ tipo: 'info', texto: `⏳ Comprobante ${data.ncf} pendiente de envío` });
+              }
+            }
+          } catch (err) {
+            console.log('ℹ️ No se pudo verificar el estado ECF');
+          }
+        }
 
       } catch (err: any) {
         setError(err.response?.data?.message || 'Error al cargar la venta');
@@ -277,9 +290,17 @@ if (esNcfElectronico(data.ncf)) {
           setLoadingNcf(true);
           try {
             const { data } = await ventaApi.generarNcf(formData.tipo);
-            setFormData(prev => ({ ...prev, ncf: data.ncfGenerado }));
+            // ✅ Comprobante Consumo (32) no lleva vencimiento; el resto sí.
+            const vencimientoStr = formData.tipo !== '32' && data.vencimiento
+              ? data.vencimiento.split('T')[0]
+              : '';
+            setFormData(prev => ({
+              ...prev,
+              ncf: data.ncfGenerado,
+              vencimiento: vencimientoStr,
+            }));
           } catch (err: any) {
-            setFormData(prev => ({ ...prev, ncf: '' }));
+            setFormData(prev => ({ ...prev, ncf: '', vencimiento: '' }));
           } finally {
             setLoadingNcf(false);
           }
@@ -327,6 +348,22 @@ if (esNcfElectronico(data.ncf)) {
     };
   }, [detallesVenta, formData.monto_Servicios, formData.itbis_Servicios, cobroData]);
 
+  // ═══ Calcular montos de retención cuando cambien los selects o los montos base ═══
+  useEffect(() => {
+    const retItbisSel = retencionesItbis.find(r => r.idretencion === cobroData.id_retencion_itbis);
+    const retIsrSel = retencionesIsr.find(r => r.idretencion === cobroData.id_retencion_isr);
+    
+    // FÓRMULA: El porcentaje ya viene como decimal (0.10 = 10%)
+    const nuevaRetItbis = retItbisSel ? calculos.itbis * retItbisSel.porcentaje : 0;
+    const nuevaRetIsr = retIsrSel ? calculos.subtotal * retIsrSel.porcentaje : 0;
+    
+    setCobroData(prev => ({
+      ...prev,
+      retencion_itbis: parseFloat(nuevaRetItbis.toFixed(2)),
+      retencion_isr: parseFloat(nuevaRetIsr.toFixed(2)),
+    }));
+  }, [cobroData.id_retencion_itbis, cobroData.id_retencion_isr, calculos.itbis, calculos.subtotal, retencionesItbis, retencionesIsr]);
+
   // ═══ Handlers ═══
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -355,86 +392,82 @@ if (esNcfElectronico(data.ncf)) {
     const { name, value } = e.target;
     setCobroData(prev => ({
       ...prev,
-      [name]: ['banco_ck', 'banco_transf', 'tipo_tarjeta'].includes(name) 
+      [name]: name === 'id_retencion_itbis' || name === 'id_retencion_isr'
         ? (value === '' ? null : Number(value))
-        : Number(value) || 0
+        : ['banco_ck', 'banco_transf', 'tipo_tarjeta'].includes(name) 
+          ? (value === '' ? null : Number(value))
+          : Number(value) || 0
     }));
   };
 
   // ═══ Función para procesar facturación electrónica ═══
   const procesarFacturacionElectronica = async (idVenta: number, ncf: string): Promise<boolean> => {
-  try {
-    setProcesandoEcf(true);
-    setMensajeEcf(null);
-    
-    // 1. Verificar configuración del certificado
-    const configRes = await ecfApi.getConfiguracion();
-    const config = configRes.data;
+    try {
+      setProcesandoEcf(true);
+      setMensajeEcf(null);
+      
+      const configRes = await ecfApi.getConfiguracion();
+      const config = configRes.data;
 
-    if (!config.tieneCertificado || !config.tieneClave) {
+      if (!config.tieneCertificado || !config.tieneClave) {
+        setMensajeEcf({ 
+          tipo: 'error', 
+          texto: '⚠️ No hay certificado digital configurado. Ve a Configuración → Facturación Electrónica.' 
+        });
+        return false;
+      }
+
+      const resultado = await ventaApi.firmarYEnviarEcf(idVenta, config.ambiente);
+      const data = resultado.data;
+      
+      const esConsumoMenor250k = formData.tipo === '32' && calculos.totalVenta <= 250000;
+      
+      if (esConsumoMenor250k) {
+        if (data.estado === 'ACEPTADO') {
+          setMensajeEcf({ 
+            tipo: 'success', 
+            texto: `✅ Comprobante ${ncf} aceptado inmediatamente por la DGII.` 
+          });
+          return true;
+        } else if (data.estado === 'RECHAZADO') {
+          setMensajeEcf({ 
+            tipo: 'error', 
+            texto: `❌ Comprobante ${ncf} rechazado: ${data.mensaje || 'Error desconocido'}` 
+          });
+          return false;
+        }
+      } else {
+        if (data.trackId) {
+          setMensajeEcf({ 
+            tipo: 'success', 
+            texto: `✅ Comprobante ${ncf} enviado a la DGII. TrackID: ${data.trackId}` 
+          });
+          return true;
+        } else {
+          setMensajeEcf({ 
+            tipo: 'error', 
+            texto: `❌ Error al enviar el comprobante ${ncf}: ${data.mensaje || 'Error desconocido'}` 
+          });
+          return false;
+        }
+      }
+      
+      return false;
+    } catch (err: any) {
+      console.error('❌ Error en facturación electrónica:', err);
       setMensajeEcf({ 
         tipo: 'error', 
-        texto: '⚠️ No hay certificado digital configurado. Ve a Configuración → Facturación Electrónica.' 
+        texto: `❌ Error al procesar facturación electrónica: ${err.response?.data?.message || err.message}` 
       });
       return false;
+    } finally {
+      setProcesandoEcf(false);
     }
-
-    // 2. Llamar al endpoint de facturación electrónica
-    const resultado = await ventaApi.firmarYEnviarEcf(idVenta, config.ambiente);
-    const data = resultado.data;
-    
-    // 3. Manejar respuesta según tipo de comprobante
-    const esConsumoMenor250k = formData.tipo === '32' && calculos.totalVenta <= 250000;
-    
-    if (esConsumoMenor250k) {
-      // Consumo ≤ 250k: Respuesta inmediata
-      if (data.estado === 'ACEPTADO') {
-        setMensajeEcf({ 
-          tipo: 'success', 
-          texto: `✅ Comprobante ${ncf} aceptado inmediatamente por la DGII.` 
-        });
-        return true;
-      } else if (data.estado === 'RECHAZADO') {
-        setMensajeEcf({ 
-          tipo: 'error', 
-          texto: `❌ Comprobante ${ncf} rechazado: ${data.mensaje || 'Error desconocido'}` 
-        });
-        return false;
-      }
-    } else {
-      // Otros tipos: Respuesta con TrackId
-      if (data.trackId) {
-        setMensajeEcf({ 
-          tipo: 'success', 
-          texto: `✅ Comprobante ${ncf} enviado a la DGII. TrackID: ${data.trackId}` 
-        });
-        return true;
-      } else {
-        setMensajeEcf({ 
-          tipo: 'error', 
-          texto: `❌ Error al enviar el comprobante ${ncf}: ${data.mensaje || 'Error desconocido'}` 
-        });
-        return false;
-      }
-    }
-    
-    return false;
-  } catch (err: any) {
-    console.error('❌ Error en facturación electrónica:', err);
-    setMensajeEcf({ 
-      tipo: 'error', 
-      texto: `❌ Error al procesar facturación electrónica: ${err.response?.data?.message || err.message}` 
-    });
-    return false;
-  } finally {
-    setProcesandoEcf(false);
-  }
-};
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    // ✅ BLOQUEO: Si tiene cobro registrado, no permitir modificar
     if (esEdicion && tieneCobro) {
       alert('⚠️ Esta venta tiene un cobro registrado y no puede ser modificada.\n\nPara realizar cambios, primero debe eliminar o anular el cobro asociado.');
       return;
@@ -491,8 +524,8 @@ if (esNcfElectronico(data.ncf)) {
         const ventaRes = await ventaApi.create(finalData, idEmpresa);
         idVenta = typeof ventaRes.data === 'number' ? ventaRes.data : ventaRes.data;
       }
-
-      // ✅ PROCESAR COBRO SI APLICA
+      // ✅ Se registra el cobro si hay algún método de pago O retención ITBIS O retención ISR,
+      // sin importar si la venta es solo bienes, solo servicio, o ambos.
       if (calculos.totalCobrado > 0) {
         try {
           const idDocRes = await cobroApi.getIdDocumento('Venta', formData.ncf);
@@ -501,23 +534,76 @@ if (esNcfElectronico(data.ncf)) {
           if (!idDocumento || idDocumento === 0) {
             console.warn('⚠️ No se pudo obtener el ID del documento. El cobro no se registrará.');
           } else {
-            const detallesCobro: DetalleCobroSaveDto[] = detallesVenta.map(d => {
-              const montoLinea = d.subtotal + d.itbis;
+            // Tasas seleccionadas (constantes para todas las líneas de este cobro)
+            const retItbisSel = retencionesItbis.find(r => r.idretencion === cobroData.id_retencion_itbis);
+            const retIsrSel = retencionesIsr.find(r => r.idretencion === cobroData.id_retencion_isr);
+            const tasaItbis = retItbisSel?.porcentaje ?? 0;
+            const tasaIsr = retIsrSel?.porcentaje ?? 0;
+
+            // 1. Construir líneas base: bienes + servicio (si aplica)
+            interface LineaBase { monto: number; descuento: number; p_descuento: number; }
+            const lineasBase: LineaBase[] = detallesVenta.map(d => ({
+              monto: d.subtotal + d.itbis,
+              descuento: d.subtotal * d.descuento,
+              p_descuento: d.descuento,
+            }));
+
+            if (formData.monto_Servicios > 0) {
+              lineasBase.push({
+                monto: formData.monto_Servicios + formData.itbis_Servicios,
+                descuento: 0,
+                p_descuento: 0,
+              });
+            }
+
+            // Fallback: si por algún motivo no hay bienes ni servicio pero sí hay cobro
+            // (ej. solo retención sin ítems), garantizar al menos una línea
+            if (lineasBase.length === 0) {
+              lineasBase.push({
+                monto: calculos.totalVenta,
+                descuento: 0,
+                p_descuento: 0,
+              });
+            }
+
+            const montoTotalLineas = lineasBase.reduce((sum, l) => sum + l.monto, 0);
+
+            // 2. Repartir retenciones proporcionalmente entre las líneas,
+            //    ajustando la última línea para cuadrar exacto (evita descuadres de centavos)
+            let acumItbis = 0;
+            let acumIsr = 0;
+
+            const detallesCobro: DetalleCobroSaveDto[] = lineasBase.map((l, idx) => {
+              const esUltima = idx === lineasBase.length - 1;
+              let itrLinea: number;
+              let isrLinea: number;
+
+              if (esUltima) {
+                itrLinea = parseFloat((cobroData.retencion_itbis - acumItbis).toFixed(2));
+                isrLinea = parseFloat((cobroData.retencion_isr - acumIsr).toFixed(2));
+              } else {
+                const proporcion = montoTotalLineas > 0 ? l.monto / montoTotalLineas : 0;
+                itrLinea = parseFloat((cobroData.retencion_itbis * proporcion).toFixed(2));
+                isrLinea = parseFloat((cobroData.retencion_isr * proporcion).toFixed(2));
+                acumItbis += itrLinea;
+                acumIsr += isrLinea;
+              }
+
               return {
                 iddetalle: 0,
                 iddocumento: idDocumento,
-                balance: montoLinea,
-                p_descuento: d.descuento,
-                descuento: d.subtotal * d.descuento,
-                idretencion_ITBIS: cobroData.retencion_itbis > 0 ? 1 : 0,
-                idretencion_ISR: cobroData.retencion_isr > 0 ? 1 : 0,
-                p_isr: 0,
-                p_itr: 0,
-                isr: 0,
-                itr: 0,
+                balance: l.monto,
+                p_descuento: l.p_descuento,
+                descuento: l.descuento,
+                idretencion_ITBIS: cobroData.id_retencion_itbis ?? 0,
+                idretencion_ISR: cobroData.id_retencion_isr ?? 0,
+                p_isr: tasaIsr,
+                p_itr: tasaItbis,
+                isr: isrLinea,
+                itr: itrLinea,
                 interes: 0,
                 cargos: 0,
-                monto: montoLinea,
+                monto: l.monto,
               };
             });
 
@@ -547,7 +633,7 @@ if (esNcfElectronico(data.ncf)) {
             };
 
             await cobroApi.create(cobroPayload);
-            console.log('✅ Cobro registrado correctamente');
+            console.log('✅ Cobro y Detalle_Cobro1 registrados correctamente');
           }
         } catch (cobroErr: any) {
           console.error('❌ Error al procesar el cobro:', cobroErr);
@@ -556,7 +642,6 @@ if (esNcfElectronico(data.ncf)) {
         }
       }
 
-      // ✅ VERIFICAR SI EL NCF ES ELECTRÓNICO Y PROCESAR AUTOMÁTICAMENTE
       const esElectronico = esNcfElectronico(formData.ncf);
       
       if (esElectronico) {
@@ -571,7 +656,6 @@ if (esNcfElectronico(data.ncf)) {
         setSuccess(`✅ Venta guardada correctamente`);
       }
 
-      // Esperar 2 segundos para mostrar el mensaje antes de navegar
       setTimeout(() => {
         navigate('/ventas');
       }, 2000);
@@ -612,6 +696,14 @@ if (esNcfElectronico(data.ncf)) {
       idvendedor: (cliente.vendedor && cliente.vendedor > 0) ? cliente.vendedor : prev.idvendedor,
       iddepartamento: (cliente.departamento && cliente.departamento > 0) ? cliente.departamento : prev.iddepartamento,
     }));
+    
+    // ✅ Seleccionar automáticamente las retenciones del cliente
+    setCobroData(prev => ({
+      ...prev,
+      id_retencion_itbis: cliente.retencion_ITBIS ?? null,
+      id_retencion_isr: cliente.retencion_ISR ?? null,
+    }));
+    
     setShowClienteSelector(false);
   };
 
@@ -1277,32 +1369,51 @@ if (esNcfElectronico(data.ncf)) {
                         <label className="block text-[11px] font-semibold text-red-700 uppercase mb-0.5">
                           Retención ITBIS
                         </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          name="retencion_itbis"
-                          value={cobroData.retencion_itbis}
+                        <select
+                          name="id_retencion_itbis"
+                          value={cobroData.id_retencion_itbis ?? ''}
                           onChange={handleCobroChange}
                           disabled={tieneCobro}
-                          className="w-full px-2 py-1.5 text-xs border border-red-200 bg-white rounded-lg focus:ring-1 focus:ring-red-500 outline-none text-right font-mono disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        />
+                          className="w-full px-2 py-1.5 text-xs border border-red-200 bg-white rounded-lg focus:ring-1 focus:ring-red-500 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        >
+                          <option value="">Sin retención</option>
+                          // ✅ DESPUÉS (con key único)
+{retencionesItbis.map(r => (
+  <option key={r.idretencion} value={r.idretencion}>
+    {r.nombre} ({(r.porcentaje * 100).toFixed(2)}%)
+  </option>
+))}
+                        </select>
+                        {cobroData.retencion_itbis > 0 && (
+                          <p className="text-[10px] text-red-600 mt-1 font-mono">
+                            Monto: {formatMoney(cobroData.retencion_itbis)}
+                          </p>
+                        )}
                       </div>
 
                       <div>
                         <label className="block text-[11px] font-semibold text-red-700 uppercase mb-0.5">
                           Retención ISR
                         </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          name="retencion_isr"
-                          value={cobroData.retencion_isr}
+                        <select
+                          name="id_retencion_isr"
+                          value={cobroData.id_retencion_isr ?? ''}
                           onChange={handleCobroChange}
                           disabled={tieneCobro}
-                          className="w-full px-2 py-1.5 text-xs border border-red-200 bg-white rounded-lg focus:ring-1 focus:ring-red-500 outline-none text-right font-mono disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        />
+                          className="w-full px-2 py-1.5 text-xs border border-red-200 bg-white rounded-lg focus:ring-1 focus:ring-red-500 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        >
+                          <option key={0} value="">Sin retención</option>
+                          {retencionesIsr.map(r => (
+                            <option key={r.idretencion} value={r.idretencion}>
+                              {r.nombre} ({(r.porcentaje * 100).toFixed(2)}%)
+                            </option>
+                          ))}
+                        </select>
+                        {cobroData.retencion_isr > 0 && (
+                          <p className="text-[10px] text-red-600 mt-1 font-mono">
+                            Monto: {formatMoney(cobroData.retencion_isr)}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

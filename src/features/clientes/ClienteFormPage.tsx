@@ -929,7 +929,7 @@ console.log('esEdicion:', esEdicion);
                     <select name="retencion_ITBIS" value={formData.retencion_ITBIS} onChange={handleChange} className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-emerald-500 bg-white">
                       <option value={0}>Sin retención</option>
                       {retencionesItbis.map(r => (
-                        <option key={r.id} value={r.porcentaje}>{r.codigo} {r.nombre}</option>
+                        <option key={r.idretencion} value={r.porcentaje}>{r.codigo} {r.nombre}</option>
                       ))}
                     </select>
                   )}
@@ -942,7 +942,7 @@ console.log('esEdicion:', esEdicion);
                     <select name="retencion_ISR" value={formData.retencion_ISR} onChange={handleChange} className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-emerald-500 bg-white">
                       <option value={0}>Sin retención</option>
                       {retencionesIsr.map(r => (
-                        <option key={r.id} value={r.porcentaje}>{r.codigo} {r.nombre} ({r.porcentaje * 100}%)</option>
+                        <option key={r.idretencion} value={r.porcentaje}>{r.codigo} {r.nombre} ({r.porcentaje * 100}%)</option>
                       ))}
                     </select>
                   )}

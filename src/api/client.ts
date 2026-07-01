@@ -3,7 +3,7 @@ import type { AxiosError, AxiosResponse } from 'axios';
 
 // Creamos una instancia de Axios configurada para EmmaSystem
 const apiClient = axios.create({
-  baseURL: '/api/api', // Usa el proxy de Vite (redirige a localhost:7152)
+  baseURL: '/api', // Usa el proxy de Vite (redirige a localhost:7152)
   timeout: 30000,  // 30 segundos de espera máxima
   headers: { 
     'Content-Type': 'application/json' 
